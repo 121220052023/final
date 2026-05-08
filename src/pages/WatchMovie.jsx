@@ -1,19 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Star, Calendar, Clock, Monitor, Tv, ExternalLink, ShieldCheck, ChevronDown, ChevronRight, Play, Server, Zap } from 'lucide-react';
+import { ArrowLeft, Star, Calendar, Clock, Monitor, Tv, ExternalLink, ShieldCheck, ChevronDown, ChevronRight, Play, Server, Zap, Shield } from 'lucide-react';
 import { getMovieDetails } from '../services/imdbService';
 import { tmdbApi } from '../services/tmdb';
 import { arabseedApi } from '../services/arabseed';
+import ContentFilter from '../components/ContentFilter';
+import ParentalGate from '../components/ParentalGate';
+import { useAuth } from '../context/AuthContext';
+import { watchHistoryService } from '../services/supabaseService';
 
 const WatchMovie = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const typeParam = location.state?.type;
+    const { user, session } = useAuth();
     const [content, setContent] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [selectedServer, setSelectedServer] = useState(0);
 
     // TV Show State
@@ -26,7 +30,80 @@ const WatchMovie = () => {
 
     // ArabSeed State
     const [arabseedServers, setArabseedServers] = useState([]);
-    const [loadingArabseed, setLoadingArabseed] = useState(false);
+
+    // Watch time tracking
+    const watchStartTime = useRef(null);
+    const intervalRef = useRef(null);
+    const watchedSeconds = useRef(0);
+
+    const saveWatchHistory = useCallback(async () => {
+        if (!user || !session || !content || watchedSeconds.current < 10) return;
+
+        try {
+            const isTV = content?.Type === 'tv';
+            const estimatedDuration = isTV ? 2700 : 7200;
+            const progressPercent = Math.min((watchedSeconds.current / estimatedDuration) * 100, 100);
+
+            // For TV shows, make unique ID per episode
+            const movieId = isTV ? `${id}-S${selectedSeason}E${selectedEpisode}` : id;
+            const title = isTV ? `${content.Title} - S${selectedSeason}E${selectedEpisode}` : content.Title;
+
+            const movieData = {
+                imdbID: movieId,
+                Title: title,
+                Year: content.Year,
+                Type: content.Type,
+                Genre: content.Genre,
+                Poster: content.Poster !== 'N/A' ? content.Poster : null,
+                season: isTV ? selectedSeason : null,
+                episode: isTV ? selectedEpisode : null,
+                showId: isTV ? id : null,
+            };
+
+            await watchHistoryService.addOrUpdate(
+                movieData,
+                user.id,
+                session.access_token,
+                progressPercent,
+                watchedSeconds.current,
+                content.Genre
+            );
+        } catch (err) {
+            // Silently handle
+        }
+    }, [user, session, content, id, selectedSeason, selectedEpisode]);
+
+    const startTracking = () => {
+        if (watchStartTime.current) return;
+        watchStartTime.current = Date.now();
+        intervalRef.current = setInterval(() => {
+            watchedSeconds.current += 1;
+        }, 1000);
+    };
+
+    const stopTracking = useCallback(async () => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        watchStartTime.current = null;
+        await saveWatchHistory();
+    }, [saveWatchHistory]);
+
+    useEffect(() => {
+        if (!loading && content && user && session) {
+            startTracking();
+        }
+
+        return () => {
+            stopTracking();
+        };
+    }, [loading, content, user, session, stopTracking]);
+
+    useEffect(() => {
+        watchedSeconds.current = 0;
+        watchStartTime.current = null;
+    }, [id, selectedSeason, selectedEpisode]);
 
     const getServers = (type, id, s = 1, e = 1) => {
         const isTV = type === 'tv';
@@ -105,14 +182,12 @@ const WatchMovie = () => {
                 }
             } catch (err) {
                 console.error('Error loading content:', err);
-                setError('Could not load content information.');
             } finally {
                 setLoading(false);
             }
         };
 
         const fetchArabseedServers = async (metadata) => {
-            setLoadingArabseed(true);
             try {
                 const searchParams = new URLSearchParams(location.search);
                 const arabseedDirectUrl = searchParams.get('arabseedUrl');
@@ -137,15 +212,13 @@ const WatchMovie = () => {
                 if (servers && servers.length > 0) {
                     setArabseedServers(servers);
                 }
-            } catch (error) {
+            } catch (err) {
                 console.log('Failed to get ArabSeed direct servers (Proxy blocked or timeout)');
-            } finally {
-                setLoadingArabseed(false);
             }
         };
 
         fetchContent();
-    }, [id, location.search]);
+    }, [id, location.search, typeParam]);
 
     const fetchEpisodes = async (tvId, seasonNum) => {
         setLoadingEpisodes(true);
@@ -190,10 +263,11 @@ const WatchMovie = () => {
     const hasPlot = content?.Plot && content.Plot !== 'N/A' && content.Plot !== 'No plot available';
 
     return (
-        <div className="min-h-screen bg-black text-white/90 selection:bg-violet-500/30">
+        <ContentFilter movie={content} fallback={<ParentalGate />}>
+            <div className="min-h-screen bg-black text-white/90 selection:bg-violet-500/30">
             {/* Top Bar */}
             <motion.div
-                className="sticky top-0 z-50 bg-black/95 backdrop-blur-xl border-b border-white/5"
+                className="sticky top-0 z-50 bg-card backdrop-blur-xl"
                 initial={{ y: -60 }}
                 animate={{ y: 0 }}
             >
@@ -201,7 +275,7 @@ const WatchMovie = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => navigate(-1)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-xs font-medium"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent transition-all text-xs font-medium"
                         >
                             <ArrowLeft className="w-4 h-4" />
                             Back
@@ -231,7 +305,7 @@ const WatchMovie = () => {
                     {/* Main Player Section */}
                     <div className="lg:col-span-3 flex flex-col gap-4">
                         {/* Server Bars & Info */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] p-2 rounded-xl border border-white/5">
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] p-2 rounded-xl">
                             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
                                 {currentServers.map((server, index) => (
                                     <button
@@ -239,7 +313,7 @@ const WatchMovie = () => {
                                         onClick={() => setSelectedServer(index)}
                                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${selectedServer === index
                                             ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
-                                            : 'bg-white/5 text-white/40 border border-white/5 hover:bg-white/10'
+                                            : 'bg-muted text-white/40   hover:bg-accent'
                                             }`}
                                     >
                                         <server.icon className="w-3.5 h-3.5" />
@@ -254,7 +328,7 @@ const WatchMovie = () => {
                         </div>
 
                         {/* Iframe Player */}
-                        <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl group">
+                        <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-2xl group">
                             <iframe
                                 key={`${selectedServer}-${selectedSeason}-${selectedEpisode}`}
                                 src={currentServers[selectedServer].url}
@@ -268,10 +342,10 @@ const WatchMovie = () => {
                         </div>
 
                         {/* Bottom Info Panel */}
-                        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5">
+                        <div className="p-6 rounded-2xl bg-white/[0.02]">
                             <div className="flex flex-col md:flex-row gap-6">
                                 {content?.Poster && (
-                                    <img src={content.Poster} alt="Poster" className="w-24 h-36 object-cover rounded-xl border border-white/10 hidden md:block" />
+                                    <img src={content.Poster} alt="Poster" className="w-24 h-36 object-cover rounded-xl hidden md:block" />
                                 )}
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-2">
@@ -307,8 +381,8 @@ const WatchMovie = () => {
                     {/* Sidebar: Episode/Season Selection */}
                     <div className="lg:col-span-1 flex flex-col gap-4 max-h-[700px]">
                         {isTV ? (
-                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col h-full overflow-hidden">
-                                <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
+                            <div className="bg-white/[0.02] rounded-2xl flex flex-col h-full overflow-hidden">
+                                <div className="p-4 flex items-center justify-between bg-white/[0.01]">
                                     <h3 className="text-sm font-black flex items-center gap-2">
                                         <Tv className="w-4 h-4 text-violet-400" />
                                         Episodic Content
@@ -316,7 +390,7 @@ const WatchMovie = () => {
                                     <div className="relative">
                                         <button
                                             onClick={() => setShowSeasonDropdown(!showSeasonDropdown)}
-                                            className="flex items-center gap-1.5 px-3 py-1 bg-violet-600/20 text-violet-400 rounded-lg text-xs font-bold border border-violet-500/20 hover:bg-violet-600/30 transition-all"
+                                            className="flex items-center gap-1.5 px-3 py-1 bg-violet-600/20 text-violet-400 rounded-lg text-xs font-bold hover:bg-violet-600/30 transition-all"
                                         >
                                             Season {selectedSeason}
                                             <ChevronDown className={`w-3 h-3 transition-transform ${showSeasonDropdown ? 'rotate-180' : ''}`} />
@@ -324,7 +398,7 @@ const WatchMovie = () => {
                                         <AnimatePresence>
                                             {showSeasonDropdown && (
                                                 <motion.div
-                                                    className="absolute right-0 top-full mt-2 w-36 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-50 py-2"
+                                                    className="absolute right-0 top-full mt-2 w-36 bg-neutral-900 rounded-xl shadow-2xl z-50 py-2 border border-white/5"
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     exit={{ opacity: 0, scale: 0.95 }}
@@ -334,7 +408,7 @@ const WatchMovie = () => {
                                                             <button
                                                                 key={s.id}
                                                                 onClick={() => handleSeasonChange(s.season_number)}
-                                                                className={`w-full px-4 py-2 text-left text-xs font-bold hover:bg-white/5 transition-colors ${selectedSeason === s.season_number ? 'text-violet-400 bg-violet-400/5' : 'text-white/50'}`}
+                                                                className={`w-full px-4 py-2 text-left text-xs font-bold hover:bg-muted transition-colors ${selectedSeason === s.season_number ? 'text-violet-400 bg-violet-400/5' : 'text-white/50'}`}
                                                             >
                                                                 {s.name}
                                                             </button>
@@ -349,19 +423,19 @@ const WatchMovie = () => {
                                 <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                                     {loadingEpisodes ? (
                                         <div className="flex flex-col gap-2">
-                                            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-white/5 rounded-lg animate-pulse" />)}
+                                            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-muted rounded-lg animate-pulse" />)}
                                         </div>
                                     ) : (
                                         episodes.map((ep) => (
                                             <button
                                                 key={ep.id}
                                                 onClick={() => setSelectedEpisode(ep.episode_number)}
-                                                className={`w-full group flex items-center gap-3 p-3 rounded-xl transition-all border ${selectedEpisode === ep.episode_number
-                                                    ? 'bg-violet-600/20 border-violet-500/50 text-white'
-                                                    : 'bg-white/[0.01] border-white/5 text-white/40 hover:bg-white/5 hover:border-white/10'
+                                                className={`w-full group flex items-center gap-3 p-3 rounded-xl transition-all  ${selectedEpisode === ep.episode_number
+                                                    ? 'bg-violet-600/20 text-white border border-violet-500/20'
+                                                    : 'bg-white/[0.01]  text-white/40 hover:bg-muted '
                                                     }`}
                                             >
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${selectedEpisode === ep.episode_number ? 'bg-violet-500 text-white' : 'bg-white/5 text-white/30 group-hover:bg-white/10'
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${selectedEpisode === ep.episode_number ? 'bg-violet-500 text-white' : 'bg-muted text-white/30 group-hover:bg-accent'
                                                     }`}>
                                                     {ep.episode_number}
                                                 </div>
@@ -384,7 +458,7 @@ const WatchMovie = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 text-center flex flex-col items-center justify-center h-full gap-4">
+                            <div className="bg-white/[0.02] rounded-2xl p-6 text-center flex flex-col items-center justify-center h-full gap-4">
                                 <div className="w-16 h-16 rounded-full bg-violet-500/10 flex items-center justify-center">
                                     <Monitor className="w-8 h-8 text-violet-400" />
                                 </div>
@@ -409,6 +483,7 @@ const WatchMovie = () => {
                 </div>
             </div>
         </div>
+        </ContentFilter>
     );
 };
 

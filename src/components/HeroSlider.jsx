@@ -96,7 +96,7 @@ const HeroSlider = () => {
                 >
                   <button
                     onClick={() => navigate(`/watch/${movie.id}`, { state: { type: movie.type || 'movie' } })}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-full font-bold text-white text-lg shadow-xl transition-all hover:scale-105"
+                    className="flex items-center gap-2 px-8 py-3.5 rounded-full font-bold text-white text-lg glass-immersive transition-all hover:scale-105"
                     style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)' }}
                   >
                     <Monitor className="w-5 h-5" />
@@ -104,7 +104,7 @@ const HeroSlider = () => {
                   </button>
                   <button
                     onClick={() => navigate(`/movie/${movie.id}`, { state: { type: movie.type || 'movie' } })}
-                    className="flex items-center gap-2 px-8 py-3.5 rounded-full font-bold text-white text-lg shadow-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all hover:scale-105"
+                    className="flex items-center gap-2 px-8 py-3.5 rounded-full font-bold text-white text-lg glass-immersive bg-accent backdrop-blur-sm hover:bg-white/20 transition-all hover:scale-105"
                   >
                     <Info className="w-5 h-5" />
                     Details

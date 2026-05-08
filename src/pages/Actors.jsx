@@ -57,7 +57,7 @@ const Actors = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search for actors..."
-                className="w-full pl-16 pr-6 py-6 bg-card/50 backdrop-blur-xl text-foreground border-2 border-white/10 rounded-3xl focus:outline-none focus:border-purple-500/50 transition-all duration-300 text-lg font-medium placeholder:text-muted-foreground/60 shadow-xl"
+                className="w-full pl-16 pr-6 py-6 bg-card/50 backdrop-blur-xl text-foreground rounded-3xl focus:outline-none -500/50 transition-all duration-300 text-lg font-medium placeholder:text-muted-foreground/60 glass-immersive"
               />
             </div>
           </div>
@@ -74,7 +74,7 @@ const Actors = () => {
               className="group cursor-pointer"
               whileHover={{ y: -10 }}
             >
-              <div className="relative overflow-hidden rounded-3xl bg-card/50 backdrop-blur-sm border-2 border-white/10 hover:border-purple-500/50 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-purple-500/20">
+              <div className="relative overflow-hidden rounded-3xl bg-card/50 backdrop-blur-sm -500/50 transition-all duration-300 glass-immersive -500/20">
                 {/* Actor Image */}
                 <div className="relative aspect-[2/3] overflow-hidden">
                   <img

@@ -1,233 +1,279 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Heart, MinusCircle, PlusCircle, Search } from 'lucide-react';
 import { tmdbApi } from '../services/tmdb';
-import { Film, Star, Calendar, Sparkles, Heart, PlusCircle, MinusCircle } from 'lucide-react';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 
-const Browse = () => {
+const categories = [
+  { id: 'popular', label: 'Popular' },
+  { id: 'top_rated', label: 'Top Rated' },
+  { id: 'upcoming', label: 'Upcoming' },
+  { id: 'now_playing', label: 'Now Playing' },
+];
+
+function normalizeMovie(movie) {
+  if (!movie || !movie.id) return null;
+  
+  return {
+    imdbID: movie.id.toString(),
+    Title: movie.title,
+    Year: movie.release_date?.split('-')[0] || 'N/A',
+    Poster: movie.poster_path ? `https://image.tmdb.org/t/p/w780${movie.poster_path}` : 'https://via.placeholder.com/700x1050?text=No+Image',
+    Plot: movie.overview || 'No plot available',
+    rating: movie.vote_average,
+  };
+}
+
+export default function Browse() {
+  const [category, setCategory] = useState('popular');
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState('popular');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const navigate = useNavigate();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
 
-  const categories = [
-    { id: 'popular', label: 'Popular', icon: '🔥' },
-    { id: 'top_rated', label: 'Top Rated', icon: '⭐' },
-    { id: 'upcoming', label: 'Upcoming', icon: '📅' },
-    { id: 'now_playing', label: 'Now Playing', icon: '🎬' },
-  ];
-
   useEffect(() => {
-    fetchMovies(category);
-  }, [category]);
+    let cancelled = false;
 
-  const fetchMovies = async (type) => {
-    setLoading(true);
-    try {
-      let data;
-      switch (type) {
-        case 'popular':
-          data = await tmdbApi.getPopularMovies();
-          break;
-        case 'top_rated':
-          data = await tmdbApi.getTopRatedMovies();
-          break;
-        case 'upcoming':
-          data = await tmdbApi.getUpcomingMovies();
-          break;
-        case 'now_playing':
-          data = await tmdbApi.getNowPlayingMovies();
-          break;
-        default:
-          data = await tmdbApi.getPopularMovies();
+    const fetchMovies = async () => {
+      setLoading(true);
+      try {
+        let data;
+        switch (category) {
+          case 'top_rated':
+            data = await tmdbApi.getTopRatedMovies(page);
+            break;
+          case 'upcoming':
+            data = await tmdbApi.getUpcomingMovies(page);
+            break;
+          case 'now_playing':
+            data = await tmdbApi.getNowPlayingMovies(page);
+            break;
+          default:
+            data = await tmdbApi.getPopularMovies(page);
+        }
+
+        if (!cancelled) {
+          // Request 21 results so featured takes 1 and grid gets 20 (5 full rows of 4)
+          const results = data.results || [];
+          const normalized = results.slice(0, 21).map(normalizeMovie).filter(Boolean);
+          setMovies(normalized);
+          setTotalPages(Math.min(data.total_pages || 1, 500));
+        }
+      } catch (error) {
+        console.error('Error fetching movies:', error);
+        if (!cancelled) setMovies([]);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setMovies(data.results || []);
-    } catch (error) {
-      console.error('Error fetching movies:', error);
-    } finally {
-      setLoading(false);
+    };
+
+    fetchMovies();
+    return () => {
+      cancelled = true;
+    };
+  }, [category, page]);
+
+  const featured = movies[0];
+
+  const isInWatchlist = (id) => watchlist.some((movie) => movie.imdbID === id);
+  const isLiked = (id) => likedMovies.some((movie) => movie.imdbID === id);
+
+  const toggleWatchlist = (event, movie) => {
+    event.stopPropagation();
+    if (!movie) return;
+    if (isInWatchlist(movie.imdbID)) {
+      removeFromWatchlist(movie.imdbID);
+    } else {
+      addToWatchlist(movie);
     }
   };
 
-  const convertToMovieFormat = (tmdbMovie) => ({
-    imdbID: tmdbMovie.id.toString(),
-    Title: tmdbMovie.title,
-    Year: tmdbMovie.release_date?.split('-')[0] || 'N/A',
-    Poster: tmdbMovie.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}` : 'N/A',
-    Plot: tmdbMovie.overview || 'No plot available',
-  });
-
-  const isInWatchlist = (movieId) => watchlist.some(m => m.imdbID === movieId.toString());
-  const isLiked = (movieId) => likedMovies.some(m => m.imdbID === movieId.toString());
-
-  const handleWatchlistToggle = (e, movie) => {
-    e.stopPropagation();
-    const formattedMovie = convertToMovieFormat(movie);
-    if (isInWatchlist(movie.id)) {
-      removeFromWatchlist(movie.id.toString());
+  const toggleLike = (event, movie) => {
+    event.stopPropagation();
+    if (!movie) return;
+    if (isLiked(movie.imdbID)) {
+      removeFromLikedMovies(movie.imdbID);
     } else {
-      addToWatchlist(formattedMovie);
+      addToLikedMovies(movie);
     }
   };
 
-  const handleLikeToggle = (e, movie) => {
-    e.stopPropagation();
-    const formattedMovie = convertToMovieFormat(movie);
-    if (isLiked(movie.id)) {
-      removeFromLikedMovies(movie.id.toString());
-    } else {
-      addToLikedMovies(formattedMovie);
-    }
+  const handleCategoryChange = (newCategory) => {
+    setCategory(newCategory);
+    setPage(1);
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex items-center justify-center gap-2 mt-12 py-8">
+        <button
+          onClick={() => {
+            setPage(p => Math.max(1, p - 1));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          disabled={page === 1}
+          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          Previous
+        </button>
+
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let pageNum;
+          if (totalPages <= 5) {
+            pageNum = i + 1;
+          } else if (page <= 3) {
+            pageNum = i + 1;
+          } else if (page >= totalPages - 2) {
+            pageNum = totalPages - 4 + i;
+          } else {
+            pageNum = page - 2 + i;
+          }
+
+          return (
+            <button
+              key={pageNum}
+              onClick={() => {
+                setPage(pageNum);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+                page === pageNum
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-white/70 hover:bg-accent hover:text-white'
+              }`}
+            >
+              {pageNum}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => {
+            setPage(p => Math.min(totalPages, p + 1));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          disabled={page === totalPages}
+          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          Next
+        </button>
+      </div>
+    );
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 min-h-screen">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="text-center mb-12"
-      >
-        <h1 className="text-5xl font-bold gradient-header bg-clip-text text-transparent mb-3">
-          Browse Movies
-        </h1>
-        <p className="text-muted-foreground text-lg">Discover your next favorite film</p>
-      </motion.div>
-
-      {/* Category Tabs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex flex-wrap justify-center gap-4 mb-12"
-      >
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setCategory(cat.id)}
-            className={`px-6 py-3 rounded-full font-semibold transition-all duration-300 flex items-center gap-2 ${
-              category === cat.id
-                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg scale-105'
-                : 'bg-card text-foreground hover:bg-accent border border-border'
-            }`}
-          >
-            <span className="text-xl">{cat.icon}</span>
-            <span>{cat.label}</span>
-          </button>
-        ))}
-      </motion.div>
-
-      {/* Movies Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(12)].map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="shimmer rounded-lg h-96"
-            />
-          ))}
+    <div className="pb-20 pt-28">
+      <div className="page-shell">
+        <div className="mb-10">
+          <div className="section-label">Browse Movies</div>
+          <h1 className="display-font mt-3 text-4xl font-extrabold text-foreground md:text-6xl">
+            Explore the catalog with stronger curation
+          </h1>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground md:text-base">
+            Each shelf now starts with a lead title and then opens into a cleaner discovery grid instead of a plain list.
+          </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {movies.map((movie, index) => (
-            <motion.div
-              key={movie.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className="movie-card group"
-              onClick={() => navigate(`/movie/${movie.id}`)}
+
+        <div className="mb-8 flex flex-wrap gap-2">
+          {categories.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleCategoryChange(item.id)}
+              className={`candy-chip ${category === item.id ? 'active' : ''}`}
             >
-              {/* Like Button */}
-              <button
-                onClick={(e) => handleLikeToggle(e, movie)}
-                className="absolute top-2 right-2 z-10 bg-black bg-opacity-50 p-2 rounded-full hover:bg-opacity-70 transition-all"
-              >
-                <Heart
-                  className={`w-5 h-5 ${isLiked(movie.id) ? 'text-red-500 fill-red-500' : 'text-white'}`}
-                />
-              </button>
-
-              {/* Movie Poster */}
-              <div className="relative h-96 overflow-hidden">
-                <img
-                  src={
-                    movie.poster_path
-                      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-                      : 'https://via.placeholder.com/500x750?text=No+Image'
-                  }
-                  alt={movie.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-                
-                {/* Hover Overlay */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  whileHover={{ opacity: 1 }}
-                  className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col items-center justify-end p-4 gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                >
-                  <div className="flex items-center gap-4 text-white text-sm mb-2">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span>{movie.vote_average?.toFixed(1)}</span>
-                    </div>
-                    {movie.release_date && (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>{movie.release_date.split('-')[0]}</span>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={(e) => handleWatchlistToggle(e, movie)}
-                    className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
-                  >
-                    {isInWatchlist(movie.id) ? (
-                      <>
-                        <MinusCircle className="w-4 h-4" />
-                        Remove from Watchlist
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle className="w-4 h-4" />
-                        Add to Watchlist
-                      </>
-                    )}
-                  </button>
-                </motion.div>
-              </div>
-
-              {/* Movie Info */}
-              <div className="p-4">
-                <h3 className="text-lg font-bold text-foreground truncate">{movie.title}</h3>
-                <p className="text-muted-foreground text-sm line-clamp-2 mt-1">
-                  {movie.overview || 'No description available'}
-                </p>
-              </div>
-            </motion.div>
+              {item.label}
+            </button>
           ))}
         </div>
-      )}
 
-      {movies.length === 0 && !loading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-20"
-        >
-          <Film className="w-24 h-24 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground text-xl">No movies found</p>
-        </motion.div>
-      )}
+        {loading ? (
+          <div className="grid gap-5 md:grid-cols-6">
+            <div className="shimmer h-[30rem] rounded-[1.75rem] md:col-span-4" />
+            <div className="shimmer h-[30rem] rounded-[1.75rem] md:col-span-2" />
+            <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+            <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+            <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+          </div>
+        ) : movies.length === 0 ? (
+          <div className="glass-immersive rounded-[2rem] p-12 text-center">
+            <Search className="mx-auto h-12 w-12 text-muted-foreground" />
+            <h2 className="display-font mt-5 text-3xl font-bold text-foreground">No movies found</h2>
+          </div>
+        ) : (
+          <>
+            {featured && (
+              <button
+                onClick={() => navigate(`/movie/${featured.imdbID}`)}
+                className="movie-card group relative mb-10 overflow-hidden text-left"
+              >
+                <img
+                  src={featured.Poster}
+                  alt={featured.Title}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,12,0.96)_0%,rgba(8,9,12,0.78)_46%,rgba(8,9,12,0.12)_100%)]" />
+                <div className="relative z-10 flex min-h-[28rem] flex-col justify-end p-7">
+                  <div className="section-label">Lead Pick</div>
+                  <h2 className="display-font mt-3 max-w-2xl text-4xl font-extrabold text-white md:text-5xl">
+                    {featured.Title}
+                  </h2>
+                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72">
+                    {featured.Plot}
+                  </p>
+                </div>
+              </button>
+            )}
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {movies.slice(1).map((movie) => (
+                <button
+                  key={movie.imdbID}
+                  onClick={() => navigate(`/movie/${movie.imdbID}`)}
+                  className="movie-card group relative overflow-hidden text-left"
+                >
+                  <div className="absolute right-3 top-3 z-20 flex flex-col gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                    <button
+                      onClick={(event) => toggleLike(event, movie)}
+                      className="rounded-full bg-black/60 p-2 text-white"
+                    >
+                      <Heart className={`h-4 w-4 ${isLiked(movie.imdbID) ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
+                    <button
+                      onClick={(event) => toggleWatchlist(event, movie)}
+                      className="rounded-full bg-black/60 p-2 text-white"
+                    >
+                      {isInWatchlist(movie.imdbID) ? <MinusCircle className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
+                    </button>
+                  </div>
+
+                  <div className="aspect-[0.77] overflow-hidden">
+                    <img
+                      src={movie.Poster}
+                      alt={movie.Title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="display-font text-lg font-bold text-foreground transition-colors group-hover:text-primary">
+                      {movie.Title}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{movie.Year} • {movie.rating?.toFixed(1) || 'N/A'} rating</p>
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{movie.Plot}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {renderPagination()}
+          </>
+        )}
+      </div>
     </div>
   );
-};
-
-export default Browse;
+}

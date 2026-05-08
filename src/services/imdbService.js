@@ -93,7 +93,7 @@ export const searchMovies = async (query, page = 1, type = 'movie') => {
     if (data && data.results && data.results.length > 0) {
       // Filter out people from multi-search
       const filteredResults = data.results.filter(item => item.media_type !== 'person');
-      return { movies: filteredResults.slice(0, 12).map(convertMovie), totalPages: data.total_pages };
+      return { movies: filteredResults.slice(0, 20).map(convertMovie), totalPages: data.total_pages };
     }
 
     return { movies: [], totalPages: 0 };
@@ -125,7 +125,7 @@ export const getTrendingMovies = async (page = 1) => {
       (movie, index, self) => index === self.findIndex(m => m.id === movie.id)
     );
 
-    return { movies: uniqueMovies.slice(0, 12).map(convertMovie), totalPages: trending.total_pages };
+    return { movies: uniqueMovies.slice(0, 20).map(convertMovie), totalPages: trending.total_pages };
   } catch (error) {
     console.error('Error fetching trending movies:', error);
     return { movies: [], totalPages: 0 };
@@ -210,7 +210,7 @@ export const getMoviesByGenre = async (genreId, page = 1) => {
     }, page);
 
     if (data.results && data.results.length > 0) {
-      return { movies: data.results.slice(0, 12).map(convertMovie), totalPages: data.total_pages };
+      return { movies: data.results.slice(0, 20).map(convertMovie), totalPages: data.total_pages };
     }
 
     return { movies: [], totalPages: 0 };
@@ -239,13 +239,17 @@ export const getPopularMoviesForSlider = async () => {
   try {
     const data = await makeRequest('/movie/popular', { language: 'en-US' });
     if (data.results && data.results.length > 0) {
-      return data.results.slice(0, 5).map(movie => ({
-        id: movie.id,
-        title: movie.title,
-        backdrop: movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : null,
-        overview: movie.overview,
-        type: 'movie',
-      }));
+      return data.results.slice(0, 5).map((movie) => {
+        const converted = convertMovie(movie);
+
+        return {
+          ...converted,
+          id: movie.id,
+          title: converted.Title,
+          overview: converted.Plot,
+          type: converted.Type,
+        };
+      });
     }
     return [];
   } catch (error) {
@@ -258,7 +262,7 @@ export const getUpcomingMovies = async (page = 1) => {
   try {
     const data = await makeRequest('/movie/upcoming', { language: 'en-US' }, page);
     if (data.results && data.results.length > 0) {
-      return { movies: data.results.slice(0, 12).map(convertMovie), totalPages: data.total_pages };
+      return { movies: data.results.slice(0, 16).map(convertMovie), totalPages: data.total_pages };
     }
     return { movies: [], totalPages: 0 };
   } catch (error) {
@@ -266,4 +270,3 @@ export const getUpcomingMovies = async (page = 1) => {
     return { movies: [], totalPages: 0 };
   }
 };
-

@@ -102,7 +102,7 @@ export const arabseedApi = {
 
             // Extract iframes
             $watch('iframe').each((i, el) => {
-                const src = $(el).attr('src') || $(el).attr('data-src');
+                const src = $watch(el).attr('src') || $watch(el).attr('data-src');
                 if (src && src.startsWith('http')) {
                     servers.push({
                         name: `ArabSeed Server ${i + 1}`,
@@ -114,10 +114,10 @@ export const arabseedApi = {
 
             // Extract data-server attributes from server lists
             $watch('[data-server], [data-link], .server').each((i, el) => {
-                const link = $(el).attr('data-link') || $(el).attr('data-server');
+                const link = $watch(el).attr('data-link') || $watch(el).attr('data-server');
                 if (link && link.startsWith('http')) {
                     servers.push({
-                        name: $(el).text().trim() || `ArabSeed Link ${i + 1}`,
+                        name: $watch(el).text().trim() || `ArabSeed Link ${i + 1}`,
                         url: link,
                         type: 'embed'
                     });

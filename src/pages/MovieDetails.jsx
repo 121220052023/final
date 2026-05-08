@@ -1,543 +1,570 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Calendar, Clock, Sparkles, Lightbulb, Heart, Play, X, Film, Award, Globe, Monitor } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  Calendar,
+  Heart,
+  Languages,
+  MessageSquare,
+  Play,
+  Plus,
+  Sparkles,
+  Star,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { getMovieDetails } from '../services/imdbService';
-import { getAISummary, getSimilarMovies } from '../services/aiService';
+import { getAISummary } from '../services/aiService';
 import { tmdbApi } from '../services/tmdb';
+import { reviewService } from '../services/reviewService';
+import ContentFilter from '../components/ContentFilter';
+import ParentalGate from '../components/ParentalGate';
+import { useWatchlist } from '../context/WatchlistContext';
+import { useLikedMovies } from '../context/LikedMoviesContext';
+import { useAuth } from '../context/AuthContext';
+import { usePlaybackSettings } from '../hooks/useSettings';
+import {
+  getBackdropUrl,
+  getDisplayCopy,
+  getDisplayTitle,
+  getGenreList,
+  getMediaId,
+  getPosterUrl,
+  getRatingValue,
+  normalizeMediaItem,
+} from '../utils/media';
 
-const MovieDetails = () => {
+function SimilarCard({ item, onOpen, onWatch }) {
+  return (
+    <article className="movie-card overflow-hidden rounded-[1.4rem]">
+      <button onClick={() => onOpen(item)} className="group block w-full text-left">
+        <div className="aspect-[0.74] overflow-hidden">
+          <img
+            src={getPosterUrl(item)}
+            alt={getDisplayTitle(item)}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        </div>
+      </button>
+      <div className="space-y-3 p-4">
+        <button onClick={() => onOpen(item)} className="display-font text-left text-lg font-bold text-foreground hover:text-primary">
+          {getDisplayTitle(item)}
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onWatch(item)} className="btn-primary flex-1 justify-center px-4 py-2 text-sm">
+            Watch
+          </button>
+          <button onClick={() => onOpen(item)} className="btn-secondary px-4 py-2 text-sm">
+            Open
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default function MovieDetails() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
+  const navigate = useNavigate();
   const typeParam = location.state?.type;
+  const { user, isAuthenticated } = useAuth();
+  const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
+  const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
+  const playbackSettings = usePlaybackSettings();
 
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [aiSummary, setAiSummary] = useState('');
-  const [similarMovies, setSimilarMovies] = useState([]);
-  const [loadingAI, setLoadingAI] = useState(false);
-  const [loadingSimilar, setLoadingSimilar] = useState(false);
-  const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [trailer, setTrailer] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
-  const [autoPlayedTrailer, setAutoPlayedTrailer] = useState(false);
+  const [cast, setCast] = useState([]);
+  const [similarMovies, setSimilarMovies] = useState([]);
+  const [aiSummary, setAiSummary] = useState('');
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [userReview, setUserReview] = useState(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewTitle, setReviewTitle] = useState('');
+  const [reviewContent, setReviewContent] = useState('');
+  const [reviewRating, setReviewRating] = useState(7);
+
+  const isInWatchlist = watchlist.some((item) => item.imdbID === id);
+  const isLiked = likedMovies.some((item) => item.imdbID === id);
 
   useEffect(() => {
-    loadMovieDetails();
-    loadTrailer();
-    checkWatchlist();
-    setAutoPlayedTrailer(false);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    
+    let cancelled = false;
+
+    const loadMovie = async () => {
+      setLoading(true);
+
+      try {
+        const details = await getMovieDetails(id, typeParam);
+        if (cancelled) return;
+        setMovie(details);
+
+        const isTV = details.Type === 'tv';
+
+        const [videos, credits, recommendations] = await Promise.allSettled([
+          isTV ? tmdbApi.getTVShowVideos(id) : tmdbApi.getMovieVideos(id),
+          isTV ? tmdbApi.getTVCredits(id) : tmdbApi.getMovieCredits(id),
+          isTV ? tmdbApi.getTVRecommendations(id) : tmdbApi.getMovieRecommendations(id),
+        ]);
+
+        if (cancelled) return;
+
+        if (videos.status === 'fulfilled') {
+          const trailerVideo =
+            videos.value.results?.find((video) => video.type === 'Trailer' && video.site === 'YouTube') ||
+            videos.value.results?.find((video) => video.type === 'Teaser' && video.site === 'YouTube');
+          setTrailer(trailerVideo || null);
+        }
+
+        if (credits.status === 'fulfilled') {
+          setCast((credits.value.cast || []).slice(0, 10));
+        }
+
+        if (recommendations.status === 'fulfilled') {
+          setSimilarMovies((recommendations.value.results || []).slice(0, 8).map(normalizeMediaItem));
+        }
+      } catch (error) {
+        console.error('Error loading movie details:', error);
+        if (!cancelled) setMovie(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadMovie();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, typeParam]);
 
-  const loadMovieDetails = async () => {
-    setLoading(true);
-    try {
-      const data = await getMovieDetails(id, typeParam);
-      setMovie(data);
-    } catch (error) {
-      console.error('Error loading movie details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const loadTrailer = async () => {
-    try {
-      let videos;
+    const loadReviews = async () => {
+      if (!movie?.imdbID) return;
+      
       try {
-        videos = await tmdbApi.getMovieVideos(id);
-      } catch (err) {
-        videos = await tmdbApi.getTVShowVideos(id);
-      }
+        const movieType = movie?.Type === 'tv' ? 'tv' : 'movie';
+        const [allReviews, existingReview] = await Promise.allSettled([
+          reviewService.getMovieReviews(id, movieType, 1, 20).catch(() => ({ reviews: [] })),
+          isAuthenticated ? reviewService.getUserReviewForMovie(id, movieType).catch(() => null) : Promise.resolve(null),
+        ]);
 
-      const trailerVideo = videos.results?.find(
-        video => video.type === 'Trailer' && video.site === 'YouTube'
-      ) || videos.results?.find(
-        video => video.type === 'Teaser' && video.site === 'YouTube'
-      );
-      setTrailer(trailerVideo);
+        if (cancelled) return;
+        
+        const reviewsData = allReviews.status === 'fulfilled' ? allReviews.value : { reviews: [] };
+        const userReviewData = existingReview.status === 'fulfilled' ? existingReview.value : null;
+        
+        setReviews(reviewsData.reviews || []);
+        setUserReview(userReviewData);
 
-      // Auto-play trailer after 1 second
-      if (trailerVideo && !autoPlayedTrailer) {
-        setTimeout(() => {
-          setShowTrailer(true);
-          setAutoPlayedTrailer(true);
-        }, 1000);
+        if (userReviewData) {
+          setReviewTitle(userReviewData.title || '');
+          setReviewContent(userReviewData.content || '');
+          setReviewRating(userReviewData.rating || 7);
+        }
+      } catch (error) {
+        console.error('Error loading reviews:', error);
+        if (!cancelled) {
+          setReviews([]);
+          setUserReview(null);
+        }
       }
-    } catch (error) {
-      console.error('Error loading trailer:', error);
+    };
+
+    if (movie) {
+      loadReviews();
     }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [movie, id, isAuthenticated]);
+
+  const averageRating = useMemo(() => {
+    if (!reviews.length) return null;
+    return (reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length).toFixed(1);
+  }, [reviews]);
+
+  const openMovie = (item) => {
+    const itemId = getMediaId(item);
+    if (!itemId) return;
+    navigate(`/movie/${itemId}`, { state: { type: item.Type || item.type || 'movie' } });
   };
 
-  const checkWatchlist = () => {
-    const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
-    setIsInWatchlist(watchlist.some(item => item.imdbID === id));
+  const watchMovie = (item) => {
+    const itemId = getMediaId(item);
+    if (!itemId) return;
+    navigate(`/watch/${itemId}`, { state: { type: item.Type || item.type || 'movie' } });
   };
 
   const handleAISummary = async () => {
+    if (!movie) return;
     setLoadingAI(true);
     try {
       const summary = await getAISummary(movie);
       setAiSummary(summary);
     } catch (error) {
-      console.error('Error getting AI summary:', error);
-      setAiSummary('Failed to generate AI summary. Please try again.');
+      console.error('Error generating AI summary:', error);
+      setAiSummary('AI summary could not be generated right now.');
     } finally {
       setLoadingAI(false);
     }
   };
 
-  const handleSimilarMovies = async () => {
-    setLoadingSimilar(true);
-    try {
-      const similar = await getSimilarMovies(movie);
-      setSimilarMovies(similar);
-    } catch (error) {
-      console.error('Error getting similar movies:', error);
-    } finally {
-      setLoadingSimilar(false);
-    }
-  };
+  const handleSubmitReview = async () => {
+    if (!reviewTitle.trim() || !reviewContent.trim()) return;
 
-  const toggleWatchlist = () => {
-    const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
-    if (isInWatchlist) {
-      const filtered = watchlist.filter(item => item.imdbID !== id);
-      localStorage.setItem('watchlist', JSON.stringify(filtered));
-      setIsInWatchlist(false);
-    } else {
-      watchlist.push(movie);
-      localStorage.setItem('watchlist', JSON.stringify(watchlist));
-      setIsInWatchlist(true);
+    setSubmittingReview(true);
+    try {
+      const movieType = movie?.Type === 'tv' ? 'tv' : 'movie';
+      if (userReview) {
+        await reviewService.updateReview(userReview.id, {
+          title: reviewTitle,
+          content: reviewContent,
+          rating: reviewRating,
+        });
+      } else {
+        await reviewService.createReview(id, movieType, reviewTitle, reviewRating, reviewContent);
+      }
+
+      const updatedReviews = await reviewService.getMovieReviews(id, movieType, 1, 20);
+      const updatedUserReview = await reviewService.getUserReviewForMovie(id, movieType);
+      setReviews(updatedReviews.reviews || []);
+      setUserReview(updatedUserReview);
+      setShowReviewForm(false);
+    } catch (error) {
+      console.error('Error saving review:', error);
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="shimmer h-96 w-96 rounded-lg"></div>
+      <div className="pb-20 pt-28">
+        <div className="page-shell-wide space-y-6">
+          <div className="shimmer h-[32rem] rounded-[2rem]" />
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div className="shimmer h-80 rounded-[1.5rem]" />
+            <div className="shimmer h-80 rounded-[1.5rem]" />
+            <div className="shimmer h-80 rounded-[1.5rem]" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!movie) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground text-xl">Movie not found</p>
+      <div className="pb-20 pt-28">
+        <div className="page-shell-wide">
+          <div className="editorial-panel rounded-[2rem] p-10 text-center">
+            <h1 className="display-font text-4xl font-bold text-foreground">Title not found</h1>
+            <p className="mt-4 text-muted-foreground">This movie or series could not be loaded.</p>
+          </div>
+        </div>
       </div>
     );
   }
 
+  const rating = getRatingValue(movie);
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Trailer Modal */}
-      <AnimatePresence>
-        {showTrailer && trailer && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowTrailer(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="relative w-full max-w-6xl aspect-video"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setShowTrailer(false)}
-                className="absolute -top-12 right-0 text-white hover:text-purple-400 transition-colors"
-              >
-                <X className="w-8 h-8" />
-              </button>
-              <iframe
-                className="w-full h-full rounded-xl shadow-2xl"
-                src={`https://www.youtube.com/embed/${trailer.key}?autoplay=1&rel=0`}
-                title="Movie Trailer"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <ContentFilter movie={movie} fallback={<ParentalGate />}>
+      <div className="pb-20 pt-24">
+        {showTrailer && trailer ? (
+          <div className="fixed inset-0 z-[60] bg-black/82 p-4 backdrop-blur-md">
+            <div className="page-shell-wide flex h-full items-center justify-center">
+              <div className="relative aspect-video w-full max-w-6xl overflow-hidden rounded-[1.8rem] border border-white/10 bg-black">
+                <button
+                  onClick={() => setShowTrailer(false)}
+                  className="absolute right-4 top-4 z-10 rounded-full bg-black/70 p-2 text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <iframe
+                  className="h-full w-full"
+                  src={`https://www.youtube.com/embed/${trailer.key}?autoplay=1&rel=0`}
+                  title="Trailer"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
-      {/* Hero Section with Backdrop */}
-      <div className="relative h-[75vh] overflow-hidden">
-        {movie?.backdrop ? (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${movie.backdrop})`,
-            }}
+        <section className="relative overflow-hidden border-b border-border">
+          <img
+            src={getBackdropUrl(movie)}
+            alt={getDisplayTitle(movie)}
+            className="absolute inset-0 h-full w-full object-cover"
           />
-        ) : (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${movie?.Poster !== 'N/A' ? movie?.Poster : 'https://via.placeholder.com/1920x1080'})`,
-              filter: 'blur(20px) brightness(0.4)',
-            }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,13,0.35)_0%,rgba(9,11,13,0.75)_58%,rgba(9,11,13,0.96)_100%)] dark:bg-[linear-gradient(180deg,rgba(9,11,13,0.4)_0%,rgba(9,11,13,0.8)_58%,rgba(9,11,13,1)_100%)]" />
 
-        {/* Trailer Button Overlay */}
-        {trailer && (
-          <motion.button
-            onClick={() => setShowTrailer(true)}
-            className="absolute inset-0 flex items-center justify-center group"
-            whileHover={{ scale: 1.02 }}
-            transition={{ duration: 0.2 }}
-          >
-            <motion.div
-              className="w-28 h-28 rounded-full bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 flex items-center justify-center shadow-2xl backdrop-blur-sm bg-opacity-90"
-              whileHover={{ boxShadow: "0 0 60px rgba(147, 51, 234, 0.8)" }}
-              animate={{
-                boxShadow: ["0 0 40px rgba(147, 51, 234, 0.5)", "0 0 60px rgba(59, 130, 246, 0.5)", "0 0 40px rgba(147, 51, 234, 0.5)"],
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Play className="w-14 h-14 text-white ml-2" fill="white" />
-            </motion.div>
-          </motion.button>
-        )}
-      </div>
+          <div className="page-shell-wide relative z-10 py-16 md:py-20">
+            <div className="grid gap-8 xl:grid-cols-[20rem_minmax(0,1fr)_22rem] xl:items-end">
+              <div className="editorial-panel overflow-hidden rounded-[1.8rem]">
+                <img
+                  src={getPosterUrl(movie)}
+                  alt={getDisplayTitle(movie)}
+                  className="aspect-[0.72] w-full object-cover"
+                />
+              </div>
 
-      {/* Content */}
-      <div className="container mx-auto px-4 -mt-72 relative z-10 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Poster */}
-          <motion.div
-            className="lg:col-span-1"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="relative group">
-              <motion.img
-                src={movie?.Poster !== 'N/A' ? movie?.Poster : 'https://via.placeholder.com/300x450'}
-                alt={movie?.Title}
-                className="w-full rounded-3xl shadow-2xl border-4 border-purple-500/20"
-                whileHover={{ scale: 1.02, borderColor: 'rgba(147, 51, 234, 0.4)' }}
-                transition={{ duration: 0.3 }}
-              />
-              {trailer && (
-                <motion.button
-                  onClick={() => setShowTrailer(true)}
-                  className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/90 via-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl"
-                  whileHover={{ scale: 1.02 }}
-                >
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center shadow-xl">
-                    <Play className="w-10 h-10 text-white ml-1" fill="white" />
-                  </div>
-                </motion.button>
-              )}
-            </div>
-          </motion.div>
+              <div className="text-white">
+                <div className="section-label text-white/75">{movie.Type === 'tv' ? 'Series detail' : 'Movie detail'}</div>
+                <h1 className="display-font mt-3 max-w-4xl text-5xl font-bold leading-[0.92] md:text-6xl xl:text-7xl">
+                  {getDisplayTitle(movie)}
+                </h1>
 
-          {/* Details */}
-          <motion.div
-            className="lg:col-span-2"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <motion.h1
-              className="text-5xl md:text-7xl font-bold gradient-header bg-clip-text text-transparent mb-6 leading-tight"
-              initial={{ y: -20 }}
-              animate={{ y: 0 }}
-            >
-              {movie?.Title}
-            </motion.h1>
+                <div className="mt-5 flex flex-wrap gap-2.5">
+                  {getGenreList(movie).map((genre) => (
+                    <span key={genre} className="rounded-full border border-white/12 bg-black/26 px-3 py-1.5 text-sm font-semibold text-white/86">
+                      {genre}
+                    </span>
+                  ))}
+                </div>
 
-            <div className="flex flex-wrap items-center gap-4 mb-8">
-              {movie?.imdbRating && movie.imdbRating !== 'N/A' && movie.imdbRating !== '0.0' && (
-                <motion.div
-                  className="flex items-center gap-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 px-5 py-3 rounded-full border-2 border-yellow-500/30"
-                  whileHover={{ scale: 1.05, borderColor: 'rgba(234, 179, 8, 0.6)' }}
-                >
-                  <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-                  <span className="text-foreground font-bold text-xl">{movie.imdbRating}/10</span>
-                  <span className="text-muted-foreground text-sm">({movie.imdbVotes} votes)</span>
-                </motion.div>
-              )}
-              {movie?.Year && movie.Year !== 'N/A' && (
-                <motion.div
-                  className="flex items-center gap-2 bg-card px-5 py-3 rounded-full border-2 border-purple-500/30"
-                  whileHover={{ scale: 1.05, borderColor: 'rgba(147, 51, 234, 0.6)' }}
-                >
-                  <Calendar className="w-5 h-5 text-purple-500" />
-                  <span className="text-foreground font-semibold text-lg">{movie.Year}</span>
-                </motion.div>
-              )}
-              {movie?.Runtime && movie.Runtime !== 'N/A' && (
-                <motion.div
-                  className="flex items-center gap-2 bg-card px-5 py-3 rounded-full border-2 border-blue-500/30"
-                  whileHover={{ scale: 1.05, borderColor: 'rgba(59, 130, 246, 0.6)' }}
-                >
-                  <Clock className="w-5 h-5 text-blue-500" />
-                  <span className="text-foreground font-semibold text-lg">{movie.Runtime}</span>
-                </motion.div>
-              )}
-              {movie?.Rated && movie?.Rated !== 'N/A' && (
-                <motion.div
-                  className="flex items-center gap-2 bg-card px-5 py-3 rounded-full border-2 border-green-500/30"
-                  whileHover={{ scale: 1.05, borderColor: 'rgba(34, 197, 94, 0.6)' }}
-                >
-                  <Award className="w-5 h-5 text-green-500" />
-                  <span className="text-foreground font-semibold text-lg">{movie.Rated}</span>
-                </motion.div>
-              )}
-            </div>
+                <p className="mt-6 max-w-3xl text-base leading-8 text-white/76">
+                  {getDisplayCopy(movie)}
+                </p>
 
-            <div className="flex flex-wrap gap-3 mb-8">
-              {movie?.Genre?.split(', ').map((genre) => (
-                <motion.span
-                  key={genre}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600/20 via-blue-600/20 to-purple-600/20 text-purple-400 rounded-full text-base font-bold border-2 border-purple-500/30"
-                  whileHover={{ scale: 1.1, borderColor: 'rgba(147, 51, 234, 0.6)' }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {genre}
-                </motion.span>
-              ))}
-            </div>
-
-            <motion.p
-              className="text-muted-foreground text-xl leading-relaxed mb-10 bg-gradient-to-br from-card/80 to-card/50 p-8 rounded-2xl border-2 border-border shadow-xl"
-              whileHover={{ scale: 1.01, borderColor: 'rgba(147, 51, 234, 0.2)' }}
-            >
-              {movie?.Plot}
-            </motion.p>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-4 mb-10">
-              <motion.button
-                onClick={() => navigate(`/watch/${id}`, { state: { type: movie?.Type } })}
-                className="flex items-center gap-3 px-10 py-4 text-xl rounded-full font-bold text-white shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 50%, #7c3aed 100%)', backgroundSize: '200% auto' }}
-                whileHover={{ scale: 1.08, backgroundPosition: 'right center', boxShadow: "0 10px 40px rgba(6, 182, 212, 0.5)" }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Monitor className="w-6 h-6" />
-                {movie?.Type === 'tv' ? 'Watch Series' : 'Watch Movie'}
-              </motion.button>
-              {trailer && (
-                <motion.button
-                  onClick={() => setShowTrailer(true)}
-                  className="btn-primary flex items-center gap-3 px-10 py-4 text-xl rounded-full shadow-lg"
-                  whileHover={{ scale: 1.08, boxShadow: "0 10px 40px rgba(147, 51, 234, 0.4)" }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Play className="w-6 h-6" fill="white" />
-                  Watch Trailer
-                </motion.button>
-              )}
-              <motion.button
-                onClick={toggleWatchlist}
-                className={`${isInWatchlist ? 'bg-gradient-to-r from-red-600 to-pink-600' : 'bg-card border-2 border-border'} px-10 py-4 rounded-full font-bold transition-all duration-300 flex items-center gap-3 text-xl shadow-lg`}
-                whileHover={{ scale: 1.08, boxShadow: "0 10px 40px rgba(236, 72, 153, 0.4)" }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Heart className={`w-6 h-6 ${isInWatchlist ? 'fill-white text-white' : 'text-foreground'}`} />
-                {isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
-              </motion.button>
-              <motion.button
-                onClick={handleAISummary}
-                disabled={loadingAI}
-                className="btn-secondary px-10 py-4 rounded-full flex items-center gap-3 text-xl shadow-lg"
-                whileHover={{ scale: 1.08, boxShadow: "0 10px 40px rgba(59, 130, 246, 0.4)" }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Sparkles className="w-6 h-6" />
-                {loadingAI ? 'Generating...' : `AI ${movie?.Type === 'tv' ? 'Series' : 'Movie'} Summary`}
-              </motion.button>
-              <motion.button
-                onClick={handleSimilarMovies}
-                disabled={loadingSimilar}
-                className="btn-secondary px-10 py-4 rounded-full flex items-center gap-3 text-xl shadow-lg"
-                whileHover={{ scale: 1.08, boxShadow: "0 10px 40px rgba(59, 130, 246, 0.4)" }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Lightbulb className="w-6 h-6" />
-                {loadingSimilar ? 'Finding...' : `Similar ${movie?.Type === 'tv' ? 'Series' : 'Movies'}`}
-              </motion.button>
-            </div>
-
-            {/* Movie Info Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-              {movie?.Director && movie.Director !== 'N/A' && (
-                <motion.div
-                  className="bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg"
-                  whileHover={{ scale: 1.02, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-                >
-                  <h3 className="text-purple-500 text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <Film className="w-4 h-4" />
-                    Director
-                  </h3>
-                  <p className="text-foreground text-xl font-bold">{movie.Director}</p>
-                </motion.div>
-              )}
-              {movie?.Writer && movie.Writer !== 'N/A' && (
-                <motion.div
-                  className="bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg"
-                  whileHover={{ scale: 1.02, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-                >
-                  <h3 className="text-blue-500 text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <Film className="w-4 h-4" />
-                    Writer
-                  </h3>
-                  <p className="text-foreground text-xl font-bold">{movie.Writer}</p>
-                </motion.div>
-              )}
-              {movie?.Language && movie.Language !== 'N/A' && (
-                <motion.div
-                  className="bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg"
-                  whileHover={{ scale: 1.02, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-                >
-                  <h3 className="text-green-500 text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    Language
-                  </h3>
-                  <p className="text-foreground text-xl font-bold">{movie.Language}</p>
-                </motion.div>
-              )}
-              {movie?.BoxOffice && movie.BoxOffice !== 'N/A' && (
-                <motion.div
-                  className="bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg"
-                  whileHover={{ scale: 1.02, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-                >
-                  <h3 className="text-yellow-500 text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <Award className="w-4 h-4" />
-                    Box Office
-                  </h3>
-                  <p className="text-foreground text-xl font-bold">{movie.BoxOffice}</p>
-                </motion.div>
-              )}
-              {movie?.spoken_languages && movie.spoken_languages.length > 0 && (
-                <motion.div
-                  className="bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg md:col-span-2"
-                  whileHover={{ scale: 1.01, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-                >
-                  <h3 className="text-purple-400 text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    Spoken Languages
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {movie.spoken_languages.map((lang, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-sm font-medium">
-                        {lang}
-                      </span>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* AI Summary Section */}
-            {loadingAI && (
-              <motion.div
-                className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/30 rounded-2xl p-8 mb-8 shadow-xl"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <button onClick={() => watchMovie(movie)} className="btn-primary px-6 py-3.5">
+                    <Play className="h-4 w-4 fill-white" />
+                    {movie.Type === 'tv' ? 'Watch series' : 'Watch movie'}
+                  </button>
+                  {trailer ? (
+                    <button onClick={() => setShowTrailer(true)} className="btn-secondary border-white/20 bg-black/30 px-6 py-3.5 text-white">
+                      Trailer
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() => (isInWatchlist ? removeFromWatchlist(id) : addToWatchlist(movie))}
+                    className={`${isInWatchlist ? 'btn-soul' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
                   >
-                    <Sparkles className="w-8 h-8 text-purple-500" />
-                  </motion.div>
-                  <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent">AI Summary</h2>
-                </div>
-                <p className="text-muted-foreground leading-relaxed text-lg">Working on it...</p>
-              </motion.div>
-            )}
-            {aiSummary && !loadingAI && (
-              <motion.div
-                className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/30 rounded-2xl p-8 mb-8 shadow-xl"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.01 }}
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <Sparkles className="w-8 h-8 text-purple-500" />
-                  <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent">AI Summary</h2>
-                </div>
-                <p className="text-muted-foreground leading-relaxed text-lg">{aiSummary}</p>
-              </motion.div>
-            )}
-
-            {/* Similar Movies Section */}
-            {similarMovies.length > 0 && (
-              <motion.div
-                className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30 rounded-2xl p-8 mb-8 shadow-xl"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.01 }}
-              >
-                <div className="flex items-center gap-3 mb-6">
-                  <Lightbulb className="w-8 h-8 text-blue-500" />
-                  <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent">Similar Movies</h2>
-                </div>
-                <ul className="space-y-3">
-                  {similarMovies.map((movie, index) => (
-                    <motion.li
-                      key={index}
-                      className="text-muted-foreground text-lg flex items-center gap-3 p-3 rounded-lg hover:bg-card/50 transition-colors"
-                      whileHover={{ x: 10 }}
-                    >
-                      <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500"></div>
-                      {movie}
-                    </motion.li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-
-            {/* Cast Section */}
-            {movie?.Actors && (
-              <div className="mt-10">
-                <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent mb-6">Cast</h2>
-                <div className="flex flex-wrap gap-3">
-                  {movie.Actors.split(', ').map((actor) => (
-                    <motion.span
-                      key={actor}
-                      className="px-6 py-3 bg-card border-2 border-border rounded-xl text-foreground font-semibold text-lg shadow-md"
-                      whileHover={{ scale: 1.05, borderColor: 'rgba(147, 51, 234, 0.4)' }}
-                    >
-                      {actor}
-                    </motion.span>
-                  ))}
+                    <Plus className="h-4 w-4" />
+                    {isInWatchlist ? 'Saved for later' : 'Watch later'}
+                  </button>
+                  <button
+                    onClick={() => (isLiked ? removeFromLikedMovies(id) : addToLikedMovies(movie))}
+                    className={`${isLiked ? 'btn-primary' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
+                  >
+                    <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
+                    {isLiked ? 'Liked' : 'Like'}
+                  </button>
                 </div>
               </div>
-            )}
 
-            {/* Additional Info */}
-            {movie?.Country && (
-              <motion.div
-                className="mt-10 bg-gradient-to-br from-card to-card/50 p-8 rounded-2xl border-2 border-border shadow-lg"
-                whileHover={{ scale: 1.01, borderColor: 'rgba(147, 51, 234, 0.3)' }}
-              >
-                <h3 className="text-xl font-bold text-purple-500 mb-3 flex items-center gap-2">
-                  <Globe className="w-5 h-5" />
-                  Country
-                </h3>
-                <p className="text-muted-foreground text-lg">{movie.Country}</p>
-              </motion.div>
+              <div className="editorial-panel rounded-[1.8rem] p-6 text-foreground">
+                <div className="space-y-4">
+                  <div className="stat-tile">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Rating</div>
+                    <div className="mt-2 flex items-center gap-2 text-3xl font-bold text-foreground">
+                      <Star className="h-6 w-6 fill-current text-secondary" />
+                      {rating ? rating.toFixed(1) : movie.imdbRating || 'N/A'}
+                    </div>
+                  </div>
+
+                  <div className="stat-tile">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Year</div>
+                    <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-foreground">
+                      <Calendar className="h-4 w-4 text-primary" />
+                      {movie.Year || 'N/A'}
+                    </div>
+                  </div>
+
+                  <div className="stat-tile">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Language</div>
+                    <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-foreground">
+                      <Languages className="h-4 w-4 text-primary" />
+                      {movie.Language || 'N/A'}
+                    </div>
+                  </div>
+
+                  <button onClick={handleAISummary} className="btn-secondary w-full justify-center py-3">
+                    <Sparkles className={`h-4 w-4 ${loadingAI ? 'animate-spin' : ''}`} />
+                    {loadingAI ? 'Generating AI summary' : 'Generate AI summary'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="page-shell-wide space-y-12 pt-12">
+          <section className="grid gap-5 lg:grid-cols-4">
+            {[
+              { label: 'Director', value: movie.Director || 'N/A' },
+              { label: 'Writer', value: movie.Writer || 'N/A' },
+              { label: 'Country', value: movie.Country || 'N/A' },
+              { label: 'Runtime', value: movie.Runtime || 'N/A' },
+            ].map((item) => (
+              <div key={item.label} className="stat-tile">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">{item.label}</div>
+                <div className="mt-3 text-lg font-semibold text-foreground">{item.value}</div>
+              </div>
+            ))}
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]">
+            <div className="editorial-panel rounded-[1.8rem] p-6 sm:p-8">
+              <div className="section-label">AI summary</div>
+              <h2 className="section-heading mt-2">A faster read on the title</h2>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                {aiSummary || 'Generate a summary to get a compact take on the film, themes, and what makes it worth watching.'}
+              </p>
+            </div>
+
+            <div className="editorial-panel rounded-[1.8rem] p-6 sm:p-8">
+              <div className="section-label">Cast</div>
+              <h2 className="section-heading mt-2">Lead people in the title</h2>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {cast.length > 0 ? cast.slice(0, 6).map((person) => (
+                  <div key={person.id} className="rounded-[1.2rem] border border-border bg-card p-4">
+                    <div className="display-font text-lg font-bold text-foreground">{person.name}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">{person.character}</div>
+                  </div>
+                )) : (
+                  <p className="text-sm leading-7 text-muted-foreground">
+                    {movie.Actors || 'Cast information is not available.'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {similarMovies.length > 0 ? (
+            <section>
+              <div className="section-title mb-6">
+                <div>
+                  <div className="section-label">Similar titles</div>
+                  <h2 className="section-heading mt-2">Keep exploring in the same lane</h2>
+                </div>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                {similarMovies.slice(0, 4).map((item) => (
+                  <SimilarCard key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="editorial-panel rounded-[1.8rem] p-6 sm:p-8">
+            <div className="section-title mb-6">
+              <div>
+                <div className="section-label">Reviews</div>
+                <h2 className="section-heading mt-2">What people thought</h2>
+              </div>
+              <div className="rounded-full bg-muted px-4 py-2 text-sm font-semibold text-foreground">
+                {averageRating ? `${averageRating}/10 average` : `${reviews.length} reviews`}
+              </div>
+            </div>
+
+            {isAuthenticated ? (
+              <div className="mb-6">
+                <button onClick={() => setShowReviewForm((state) => !state)} className="btn-secondary">
+                  <MessageSquare className="h-4 w-4" />
+                  {userReview ? 'Edit your review' : 'Write a review'}
+                </button>
+              </div>
+            ) : null}
+
+            {showReviewForm ? (
+              <div className="mb-8 rounded-[1.4rem] border border-border bg-card p-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-foreground">Title</label>
+                    <input
+                      value={reviewTitle}
+                      onChange={(event) => setReviewTitle(event.target.value)}
+                      className="text-input"
+                      placeholder="Give your review a title"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-foreground">Rating</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={reviewRating}
+                      onChange={(event) => setReviewRating(parseInt(event.target.value, 10))}
+                      className="w-full accent-primary"
+                    />
+                    <div className="mt-2 text-sm font-semibold text-muted-foreground">{reviewRating}/10</div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm font-semibold text-foreground">Review</label>
+                    <textarea
+                      value={reviewContent}
+                      onChange={(event) => setReviewContent(event.target.value)}
+                      className="text-input min-h-32 resize-none"
+                      placeholder="Share what worked and what did not."
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button onClick={handleSubmitReview} disabled={submittingReview} className="btn-primary px-6 py-3">
+                    {submittingReview ? 'Saving...' : 'Save review'}
+                  </button>
+                  <button onClick={() => setShowReviewForm(false)} className="btn-secondary px-6 py-3">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {reviews.length === 0 ? (
+              <div className="rounded-[1.3rem] border border-border bg-muted/40 p-8 text-center">
+                <UserRound className="mx-auto h-12 w-12 text-primary" />
+                <p className="mt-4 text-sm leading-7 text-muted-foreground">No reviews yet. Be the first to add one.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <article key={review.id} className="rounded-[1.3rem] border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          {(review.profiles?.username || review.user_name || 'U')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-foreground">{review.profiles?.username || review.user_name || 'Anonymous'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(review.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">
+                        {review.rating}/10
+                      </div>
+                    </div>
+
+                    {review.title ? (
+                      <h3 className="display-font mt-4 text-xl font-bold text-foreground">{review.title}</h3>
+                    ) : null}
+                    <p className="mt-3 text-sm leading-7 text-muted-foreground">{review.content}</p>
+                  </article>
+                ))}
+              </div>
             )}
-          </motion.div>
+          </section>
         </div>
       </div>
-    </div>
+    </ContentFilter>
   );
-};
-
-export default MovieDetails;
-
+}

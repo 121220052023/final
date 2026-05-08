@@ -1,93 +1,44 @@
 import axios from 'axios';
+import { tmdbApi } from './tmdb';
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'qwen/qwen-2.5-coder-32b-instruct'; // Default model
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const AI_PROXY_URL = '/api/ai';
-
-const useClientSideKey = Boolean(import.meta.env.DEV && OPENROUTER_API_KEY);
-
-// Helper function to make AI API calls
-const makeAIRequest = async (prompt, model = OPENROUTER_MODEL) => {
-  try {
-    if (!prompt?.trim()) {
-      throw new Error('Prompt is required.');
+const makeAIRequest = async (prompt) => {
+  const response = await axios.post(
+    '/api/ai',
+    {
+      model: 'google/gemma-3-27b-it',
+      prompt,
     }
-
-    if (useClientSideKey) {
-      if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'YOUR_OPENROUTER_API_KEY_HERE') {
-        throw new Error('OpenRouter API key not configured. Please set VITE_OPENROUTER_API_KEY in your local .env file.');
-      }
-
-      const response = await axios.post(
-        OPENROUTER_BASE_URL,
-        {
-          model: model,
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      return response.data.choices[0].message.content;
-    }
-
-    const response = await axios.post(
-      AI_PROXY_URL,
-      {
-        prompt,
-        model,
-      }
-    );
-
-    return response.data.content;
-  } catch (error) {
-    console.error('AI API Error:', error);
-    throw error;
-  }
+  );
+  return response.data.content;
 };
 
-
 export const getAISummary = async (movie) => {
-  const prompt = `Generate a compelling and human-like summary for the movie "${movie.Title}" (${movie.Year}). 
+  const prompt = `Generate a compelling and human-like summary for the movie "${movie.Title}" (${movie.Year}).
   The movie is about: ${movie.Plot || 'A fascinating story'}.
   Genre: ${movie.Genre || 'Drama'}.
-  
-  Write a 3-4 sentence summary that captures the essence of the film, its themes, and why it's worth watching. 
+
+  Write a 3-4 sentence summary that captures the essence of the film, its themes, and why it's worth watching.
   Make it engaging and conversational, as if you're recommending it to a friend.`;
 
   return await makeAIRequest(prompt);
 };
 
-// Get AI-powered similar movie recommendations
 export const getSimilarMovies = async (movie) => {
-  const prompt = `Based on the movie "${movie.Title}" (${movie.Year}), which is a ${movie.Genre || 'Drama'} film, 
-  suggest 5 similar movies that fans of this film would enjoy. 
-  
+  const prompt = `Based on the movie "${movie.Title}" (${movie.Year}), which is a ${movie.Genre || 'Drama'} film,
+  suggest 5 similar movies that fans of this film would enjoy.
+
   For each movie, provide just the title and a brief one-line reason why it's similar.
   Format: "Movie Title - Reason"`;
 
   const response = await makeAIRequest(prompt);
-  
-  // Parse the response into an array
+
   if (Array.isArray(response)) {
     return response;
   }
-  
-  // If response is a string, split it into lines
+
   return response.split('\n').filter(line => line.trim()).slice(0, 5);
 };
 
-// Get a surprise movie recommendation with AI explanation
 export const getSurpriseMovie = async (movies) => {
   if (!movies || movies.length === 0) {
     return {
@@ -96,16 +47,14 @@ export const getSurpriseMovie = async (movies) => {
     };
   }
 
-  // Add artificial delay for demonstration of loading state
-  await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+  await new Promise(resolve => setTimeout(resolve, 800));
 
-  // Pick a random movie from the list
   const randomMovie = movies[Math.floor(Math.random() * movies.length)];
 
-  const prompt = `I'm recommending the movie "${randomMovie.Title}" (${randomMovie.Year}) to someone. 
+  const prompt = `I'm recommending the movie "${randomMovie.Title}" (${randomMovie.Year}) to someone.
   Genre: ${randomMovie.Genre || 'Drama'}.
-  
-  Write a compelling 2-3 sentence explanation of why they should watch this movie. 
+
+  Write a compelling 2-3 sentence explanation of why they should watch this movie.
   Make it enthusiastic and personal, highlighting what makes this film special.`;
 
   const reason = await makeAIRequest(prompt);
@@ -116,32 +65,81 @@ export const getSurpriseMovie = async (movies) => {
   };
 };
 
-// Get personalized movie recommendations based on preferences
 export const getPersonalizedRecommendations = async (preferences) => {
-  const prompt = `Based on these movie preferences: ${preferences}, 
-  recommend 5 movies that would be perfect for this viewer. 
-  
+  const prompt = `Based on these movie preferences: ${preferences},
+  recommend 5 movies that would be perfect for this viewer.
+
   For each recommendation, provide the title and a brief explanation of why it matches their taste.`;
 
   return await makeAIRequest(prompt);
 };
 
-// AI Assistant for conversational movie recommendations
+// Fetch actual movie data from TMDB based on AI suggestion
+const fetchMovieFromName = async (movieName) => {
+  try {
+    const result = await tmdbApi.searchMovies(movieName);
+    if (result?.results?.length > 0) {
+      const m = result.results[0];
+      return {
+        imdbID: m.id.toString(),
+        Title: m.title || m.name,
+        Year: (m.release_date || m.first_air_date || '').substring(0, 4),
+        Poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'N/A',
+        Type: m.media_type || 'movie',
+      };
+    }
+  } catch { return null; }
+  return null;
+};
+
 export const getAIAssistantResponse = async (userMessage, conversationHistory = []) => {
-  // Build conversation context
   const context = conversationHistory
-    .slice(-5) // Keep last 5 messages for context
+    .slice(-5)
     .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
     .join('\n');
 
-  const prompt = `You are a friendly and knowledgeable AI movie assistant. Help users discover movies based on their mood, preferences, or what they're thinking about.
+  const prompt = `You are a friendly AI movie assistant. Help users discover movies.
 
-Conversation history:
+Conversation:
 ${context}
 
 User: ${userMessage}
 
-Provide a helpful, conversational response. If they mention their mood or what they're thinking about, suggest 2-3 specific movies with brief explanations of why they'd be perfect. Be warm, enthusiastic, and personalized in your recommendations.`;
+Respond with a friendly recommendation mentioning 2-3 specific movie titles. Format each movie title EXACTLY like this on its own line:
+MOVIE: The Shawshank Redemption
+MOVIE: Inception
+MOVIE: Interstellar
 
-  return await makeAIRequest(prompt);
+Use ONLY the "MOVIE: Title" format for movies. Be warm and enthusiastic. Keep it concise.`;
+
+  const aiResponse = await makeAIRequest(prompt);
+
+  // Extract movie names using regex
+  const movieNames = [];
+  const lines = aiResponse.split('\n');
+  for (const line of lines) {
+    const match = line.match(/MOVIE:\s*(.+)/i);
+    if (match) {
+      const name = match[1].trim().replace(/[.*_~`]/g, ''); // Remove markdown formatting
+      if (name) movieNames.push(name);
+    }
+  }
+
+  // Fetch actual movie data from TMDB
+  const movies = [];
+  for (const name of movieNames.slice(0, 5)) {
+    const movieData = await fetchMovieFromName(name);
+    if (movieData) movies.push(movieData);
+  }
+
+  // Clean the text response by removing MOVIE: lines
+  const cleanText = aiResponse
+    .replace(/MOVIE:\s*.+\n?/gi, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+
+  return {
+    text: cleanText || aiResponse,
+    movies: movies,
+  };
 };

@@ -1,390 +1,479 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Sparkles, Shuffle, Film, User, Globe } from 'lucide-react';
-import MovieCard from '../components/MovieCard';
-import SearchBar from '../components/SearchBar';
-import LoadingSkeleton from '../components/LoadingSkeleton';
-import Pagination from '../components/ui/pagination';
-import HeroSlider from '../components/HeroSlider';
-import { searchMovies, getTrendingMovies, getMoviesByGenre, getUpcomingMovies, GENRE_MAP } from '../services/imdbService';
-import { getAISummary, getSurpriseMovie } from '../services/aiService';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Globe, Play, Shuffle, Sparkles, Star } from 'lucide-react';
+import {
+  GENRE_MAP,
+  getMoviesByGenre,
+  getPopularMoviesForSlider,
+  getTrendingMovies,
+  getUpcomingMovies,
+  searchMovies,
+} from '../services/imdbService';
+import { getSurpriseMovie } from '../services/aiService';
+import { useAuth } from '../context/AuthContext';
+import {
+  getBackdropUrl,
+  getDisplayCopy,
+  getDisplayTitle,
+  getMediaId,
+  getPosterUrl,
+  getPrimaryGenre,
+  getRatingValue,
+  getTypeLabel,
+  getYear,
+  normalizeMediaItem,
+} from '../utils/media';
 
-const Home = () => {
-  const [movies, setMovies] = useState([]);
+const genreFilters = [
+  { id: 'all', label: 'All picks' },
+  { id: 'action', label: 'Action' },
+  { id: 'drama', label: 'Drama' },
+  { id: 'thriller', label: 'Thriller' },
+  { id: 'sci-fi', label: 'Sci-Fi' },
+  { id: 'romance', label: 'Romance' },
+];
+
+const regionFilters = [
+  { id: 'all', label: 'Global' },
+  { id: 'USA', label: 'United States' },
+  { id: 'UK', label: 'United Kingdom' },
+  { id: 'France', label: 'France' },
+  { id: 'Japan', label: 'Japan' },
+  { id: 'India', label: 'India' },
+];
+
+function PosterCard({ item, badge, onOpen, onWatch }) {
+  if (!item) return null;
+
+  const rating = getRatingValue(item);
+
+  return (
+    <article className="movie-card overflow-visible rounded-2xl">
+      <button onClick={() => onOpen(item)} className="group block w-full text-left">
+        <div className="relative aspect-[0.74] overflow-hidden rounded-t-2xl bg-surface-container">
+          <img
+            src={getPosterUrl(item)}
+            alt={getDisplayTitle(item)}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent" />
+          <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+            {badge ? (
+              <span className="rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+                {badge}
+              </span>
+            ) : null}
+            <span className="rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+              {getTypeLabel(item)}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <div className="space-y-4 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <button
+              onClick={() => onOpen(item)}
+              className="display-font text-left text-xl font-bold text-foreground transition-colors hover:text-primary"
+            >
+              {getDisplayTitle(item)}
+            </button>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {getPrimaryGenre(item)} • {getYear(item)}
+            </p>
+          </div>
+          {rating ? (
+            <div className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">
+              <Star className="h-4 w-4 fill-current text-secondary" />
+              {rating.toFixed(1)}
+            </div>
+          ) : null}
+        </div>
+
+        <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
+          {getDisplayCopy(item)}
+        </p>
+
+        <div className="flex items-center gap-2">
+          <button onClick={() => onWatch(item)} className="btn-primary px-4 py-2 text-sm">
+            <Play className="h-4 w-4 fill-white" />
+            Watch
+          </button>
+          <button onClick={() => onOpen(item)} className="btn-secondary px-4 py-2 text-sm">
+            Details
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function StoryCard({ item, onOpen, className = '' }) {
+  if (!item) return null;
+
+  return (
+    <button
+      onClick={() => onOpen(item)}
+      className={`movie-card group relative overflow-hidden rounded-2xl text-left ${className}`}
+    >
+      <div className="absolute inset-0 overflow-hidden">
+        <img
+          src={getBackdropUrl(item)}
+          alt={getDisplayTitle(item)}
+          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
+      <div className="relative z-10 flex h-full flex-col justify-end p-5">
+        <div className="text-white/80 text-xs font-semibold uppercase tracking-wider">{getPrimaryGenre(item)}</div>
+        <h3 className="display-font mt-2 max-w-lg text-2xl font-bold text-white">
+          {getDisplayTitle(item)}
+        </h3>
+        <p className="mt-2 line-clamp-2 max-w-lg text-sm leading-6 text-white/75">
+          {getDisplayCopy(item)}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+export default function Home() {
+  const [heroEntries, setHeroEntries] = useState([]);
+  const [curatedMovies, setCuratedMovies] = useState([]);
+  const [upcomingMovies, setUpcomingMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedGenre, setSelectedGenre] = useState('all');
-  const [selectedCountry, setSelectedCountry] = useState('all');
-  const [searchType, setSearchType] = useState('movie'); // 'movie', 'actor', 'country'
-  const [aiSummaryModal, setAiSummaryModal] = useState(null);
-  const [surpriseModal, setSurpriseModal] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [currentSearchQuery, setCurrentSearchQuery] = useState('');
+  const [activeGenre, setActiveGenre] = useState('all');
+  const [activeRegion, setActiveRegion] = useState('all');
   const [surpriseLoading, setSurpriseLoading] = useState(false);
-
-  const genres = [
-    { id: 'all', name: 'All Movies', icon: '🎬' },
-    { id: 'action', name: 'Action', icon: '💥' },
-    { id: 'comedy', name: 'Comedy', icon: '😂' },
-    { id: 'drama', name: 'Drama', icon: '🎭' },
-    { id: 'thriller', name: 'Thriller', icon: '😱' },
-    { id: 'sci-fi', name: 'Sci-Fi', icon: '🚀' },
-    { id: 'horror', name: 'Horror', icon: '👻' },
-    { id: 'romance', name: 'Romance', icon: '💕' },
-    { id: 'adventure', name: 'Adventure', icon: '🗺️' },
-  ];
-
-  const countries = [
-    { id: 'all', name: 'All Countries', flag: '🌍' },
-    { id: 'USA', name: 'United States', flag: '🇺🇸' },
-    { id: 'UK', name: 'United Kingdom', flag: '🇬🇧' },
-    { id: 'France', name: 'France', flag: '🇫🇷' },
-    { id: 'Japan', name: 'Japan', flag: '🇯🇵' },
-    { id: 'South Korea', name: 'South Korea', flag: '🇰🇷' },
-    { id: 'India', name: 'India', flag: '🇮🇳' },
-    { id: 'Germany', name: 'Germany', flag: '🇩🇪' },
-    { id: 'Spain', name: 'Spain', flag: '🇪🇸' },
-  ];
-
-  const searchTypes = [
-    { id: 'movie', name: 'Movies', icon: Film },
-    { id: 'actor', name: 'Actors', icon: User },
-    { id: 'country', name: 'By Country', icon: Globe },
-  ];
-
-  const loadMovies = async (page = 1) => {
-    setLoading(true);
-    try {
-      let data;
-      if (selectedGenre === 'all') {
-        data = await getUpcomingMovies(page);
-      } else {
-        const genreId = GENRE_MAP[selectedGenre];
-        data = await getMoviesByGenre(genreId, page);
-      }
-      setMovies(data.movies);
-      setTotalPages(data.totalPages);
-      setCurrentPage(page);
-    } catch (error) {
-      console.error('Error loading movies:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [surprisePick, setSurprisePick] = useState(null);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    loadMovies(currentPage);
-  }, [currentPage, selectedGenre]);
+    let cancelled = false;
 
-  const handleSearch = async (query, page = 1, type = searchType) => {
-    setLoading(true);
-    try {
-      const { movies, totalPages } = await searchMovies(query, page, type);
-      setMovies(movies);
-      setTotalPages(totalPages);
-      setCurrentPage(page);
-      setCurrentSearchQuery(query);
-    } catch (error) {
-      console.error('Error searching movies:', error);
-    } finally {
-      setLoading(false);
-    }
+    const loadHome = async () => {
+      setLoading(true);
+
+      try {
+        const [heroData, curatedData, upcomingData] = await Promise.all([
+          getPopularMoviesForSlider(),
+          activeRegion !== 'all'
+            ? searchMovies(activeRegion, 1, 'country')
+            : activeGenre === 'all'
+              ? getTrendingMovies()
+              : getMoviesByGenre(GENRE_MAP[activeGenre]),
+          getUpcomingMovies(),
+        ]);
+
+        if (cancelled) return;
+
+        setHeroEntries((heroData || []).map(normalizeMediaItem));
+        setCuratedMovies((curatedData.movies || []).map(normalizeMediaItem));
+        setUpcomingMovies((upcomingData.movies || []).map(normalizeMediaItem));
+      } catch (error) {
+        console.error('Error loading home page:', error);
+        if (!cancelled) {
+          setHeroEntries([]);
+          setCuratedMovies([]);
+          setUpcomingMovies([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadHome();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGenre, activeRegion]);
+
+  const featuredMovie = useMemo(
+    () => heroEntries[0] || curatedMovies[0] || upcomingMovies[0] || null,
+    [heroEntries, curatedMovies, upcomingMovies],
+  );
+
+  const sideFeature = heroEntries[1] || curatedMovies[1] || upcomingMovies[1] || null;
+  const sideFeatureTwo = heroEntries[2] || curatedMovies[2] || upcomingMovies[2] || null;
+  const spotlight = upcomingMovies[0] || curatedMovies[3] || featuredMovie;
+  const railItems = curatedMovies.slice(0, 8);  // 8 items = 2 full rows of 4
+  const releaseItems = upcomingMovies.slice(1, 9); // 8 items = 2 full rows of 4
+  const featuredRating = getRatingValue(featuredMovie);
+
+  const openMovie = (movie) => {
+    const id = getMediaId(movie);
+    if (!id) return;
+    navigate(`/movie/${id}`, { state: { type: movie.Type || movie.type || 'movie' } });
   };
 
-  const handleAISummary = async (movie) => {
-    try {
-      const summary = await getAISummary(movie);
-      setAiSummaryModal({ movie, summary });
-    } catch (error) {
-      console.error('Error getting AI summary:', error);
-      setAiSummaryModal({ movie, summary: 'Failed to generate AI summary. Please try again.' });
-    }
+  const watchMovie = (movie) => {
+    const id = getMediaId(movie);
+    if (!id) return;
+    navigate(`/watch/${id}`, { state: { type: movie.Type || movie.type || 'movie' } });
   };
 
   const handleSurpriseMe = async () => {
     setSurpriseLoading(true);
     try {
-      const surprise = await getSurpriseMovie(movies);
-      setSurpriseModal(surprise);
+      const pick = await getSurpriseMovie(curatedMovies);
+      setSurprisePick(pick?.movie ? normalizeMediaItem(pick.movie) : null);
+      if (pick?.movie) {
+        navigate(`/movie/${pick.movie.imdbID || pick.movie.id}`, {
+          state: { type: pick.movie.Type || pick.movie.type || 'movie' },
+        });
+      }
     } catch (error) {
-      console.error('Error getting surprise movie:', error);
+      console.error('Error generating surprise pick:', error);
     } finally {
       setSurpriseLoading(false);
     }
   };
 
-  const handleGenreChange = (genre) => {
-    setSelectedGenre(genre);
-    setCurrentPage(1);
-  };
-
-  const handleCountryChange = (country) => {
-    setSelectedCountry(country);
-    setCurrentPage(1);
-    if (country !== 'all') {
-      handleSearch(country, 1, 'country');
-    } else {
-      loadMovies(1);
-    }
-  };
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    if (currentSearchQuery) {
-      handleSearch(currentSearchQuery, page);
-    } else {
-      loadMovies(page);
-    }
-  };
-
-  const filteredMovies = movies;
+  if (loading) {
+    return (
+      <div className="pb-20 pt-28">
+        <div className="page-shell-wide space-y-6">
+          <div className="shimmer h-[32rem] rounded-[2rem]" />
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div className="shimmer h-72 rounded-[1.5rem]" />
+            <div className="shimmer h-72 rounded-[1.5rem]" />
+            <div className="shimmer h-72 rounded-[1.5rem]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen">
-      {/* Hero Slider */}
-      <HeroSlider />
+    <div className="pb-20 pt-20">
+      <div className="page-shell-wide space-y-12">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_27rem]">
+          <div className="editorial-panel grid min-h-[28rem] overflow-hidden rounded-2xl lg:grid-cols-[1fr_1fr]">
+            <div className="relative flex flex-col justify-between overflow-hidden bg-surface-container-low p-6 sm:p-8 lg:p-10">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(216,69,39,0.14),transparent_28%),linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.08)_100%)]" />
+              <div className="relative z-10">
+                <div className="mb-6 flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+                  <span className="rounded-full bg-primary/10 px-3 py-1.5 text-primary">Lead story</span>
+                  <span>{getPrimaryGenre(featuredMovie)}</span>
+                  {featuredRating ? <span>{featuredRating.toFixed(1)} rating</span> : null}
+                </div>
 
-      {/* Search Bar with Type Selector */}
-      <section className="container mx-auto px-4 py-8">
-        <div className="w-full max-w-4xl mx-auto space-y-6">
-          {/* Search Type Tabs */}
-          <div className="flex items-center justify-center gap-3">
-            {searchTypes.map((type) => (
-              <motion.button
-                key={type.id}
-                onClick={() => setSearchType(type.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all duration-300 ${searchType === type.id
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-xl'
-                    : 'bg-card/50 backdrop-blur-sm border-2 border-white/10 text-foreground hover:border-purple-500/50'
-                  }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <type.icon className="w-5 h-5" />
-                {type.name}
-              </motion.button>
+                <h1 className="display-font max-w-3xl text-3xl font-bold leading-[0.9] text-foreground sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">
+                  {getDisplayTitle(featuredMovie, 'Featured Tonight')}
+                </h1>
+
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base md:text-lg">
+                  {getDisplayCopy(featuredMovie, 'A hand-selected front page for the next thing worth opening.')}
+                </p>
+              </div>
+
+              <div className="relative z-10 mt-10 space-y-6">
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => watchMovie(featuredMovie)} className="btn-primary px-6 py-3.5">
+                    <Play className="h-4 w-4 fill-white" />
+                    Play now
+                  </button>
+                  <button onClick={() => openMovie(featuredMovie)} className="btn-secondary px-6 py-3.5">
+                    More details
+                  </button>
+                  <button onClick={handleSurpriseMe} className="btn-secondary px-6 py-3.5">
+                    {surpriseLoading ? <Sparkles className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+                    {surpriseLoading ? 'Finding one' : 'Surprise me'}
+                  </button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    { label: 'Format', value: getTypeLabel(featuredMovie) },
+                    { label: 'Year', value: getYear(featuredMovie) },
+                    { label: 'Picked for', value: activeRegion === 'all' ? 'Global front page' : activeRegion },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-[1.35rem] border border-border bg-card/70 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                        {item.label}
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-foreground">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="relative min-h-[32rem] overflow-hidden bg-surface-container">
+              <img
+                src={getBackdropUrl(featuredMovie)}
+                alt={getDisplayTitle(featuredMovie)}
+                className="h-full w-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,18,20,0.05)_0%,rgba(17,18,20,0.18)_22%,rgba(17,18,20,0.62)_100%)]" />
+            </div>
+          </div>
+
+          <aside className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <StoryCard item={sideFeature} onOpen={openMovie} className="min-h-[15rem]" />
+            {sideFeatureTwo ? <StoryCard item={sideFeatureTwo} onOpen={openMovie} className="min-h-[15rem]" /> : null}
+          </aside>
+        </section>
+
+        <section className="editorial-panel rounded-[1.9rem] p-6 sm:p-8">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,22rem)_1fr] xl:items-start">
+            <div>
+              <div className="section-label">Refine the front page</div>
+              <h2 className="section-heading mt-3">Browse by genre and origin</h2>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                Tighten the shelves without going back to the old emoji bar. Switch the editorial mix by mood and country.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <div className="mb-3 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                  <span>Genres</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {genreFilters.map((genre) => (
+                    <button
+                      key={genre.id}
+                      onClick={() => setActiveGenre(genre.id)}
+                      className={`candy-chip ${activeGenre === genre.id ? 'active' : ''}`}
+                    >
+                      {genre.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-3 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                  <span>Origins</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {regionFilters.map((region) => (
+                    <button
+                      key={region.id}
+                      onClick={() => setActiveRegion(region.id)}
+                      className={`candy-chip ${activeRegion === region.id ? 'active' : ''}`}
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      {region.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div className="section-title mb-6">
+            <div>
+              <div className="section-label">Now on the shelf</div>
+              <h2 className="section-heading mt-2">Current movies and series with momentum</h2>
+            </div>
+            <button onClick={() => navigate('/trending')} className="btn-quiet">
+              Open trending
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {railItems.map((item, index) => (
+              <PosterCard
+                key={getMediaId(item)}
+                item={item}
+                badge={index === 0 ? 'Top pick' : index === 1 ? 'Fresh' : undefined}
+                onOpen={openMovie}
+                onWatch={watchMovie}
+              />
             ))}
           </div>
+        </section>
 
-          <SearchBar onSearch={handleSearch} searchType={searchType} />
-        </div>
-      </section>
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.28fr)_minmax(22rem,0.72fr)]">
+          <StoryCard item={spotlight} onOpen={openMovie} className="min-h-[24rem]" />
 
-      {/* Genre Filters - Modern Card Design */}
-      <section className="container mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
-        >
-          {/* Genre Section */}
-          <div>
-            <h2 className="text-2xl font-bold gradient-header bg-clip-text text-transparent mb-6 flex items-center gap-2">
-              <Film className="w-6 h-6 text-purple-500" />
-              Browse by Genre
-            </h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
-              {genres.map((genre) => (
-                <motion.button
-                  key={genre.id}
-                  onClick={() => handleGenreChange(genre.id)}
-                  className={`relative overflow-hidden p-4 rounded-2xl font-bold transition-all duration-300 ${selectedGenre === genre.id
-                      ? 'bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-xl scale-105'
-                      : 'bg-card/50 backdrop-blur-sm border-2 border-white/10 text-foreground hover:border-purple-500/50'
-                    }`}
-                  whileHover={{ y: -5, scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: genre.id === 'all' ? 0 : genres.findIndex(g => g.id === genre.id) * 0.05 }}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-3xl">{genre.icon}</span>
-                    <span className="text-xs font-bold">{genre.name}</span>
-                  </div>
-                  {selectedGenre === genre.id && (
-                    <motion.div
-                      layoutId="genre-indicator"
-                      className="absolute inset-0 border-4 border-white/30 rounded-2xl"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </motion.button>
-              ))}
+          <div className="editorial-panel flex h-full flex-col justify-between rounded-[1.9rem] p-6 sm:p-8">
+            <div>
+              <div className="section-label">For you</div>
+              <h2 className="section-heading mt-3">A personal lane based on what you watched</h2>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                The new recommendation page reads your watch history, watchlist, and likes to build movie and series shelves around your real habits.
+              </p>
+            </div>
+
+            <div className="mt-8 space-y-4">
+              <div className="rounded-[1.35rem] border border-border bg-muted/40 p-4 text-sm leading-7 text-muted-foreground">
+                {user
+                  ? surprisePick
+                    ? `Latest surprise detour: ${getDisplayTitle(surprisePick)}`
+                    : 'Your personal lane is ready to use from the new navigation.'
+                  : 'Sign in to make the new For You page learn from what you watch and save.'}
+              </div>
+
+              <button onClick={() => navigate('/for-you')} className="btn-primary w-full justify-between px-5 py-3.5">
+                Open For You
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
+        </section>
 
-          {/* Country Filter */}
-          <div>
-            <h2 className="text-2xl font-bold gradient-header bg-clip-text text-transparent mb-6 flex items-center gap-2">
-              <Globe className="w-6 h-6 text-blue-500" />
-              Browse by Country
-            </h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
-              {countries.map((country) => (
-                <motion.button
-                  key={country.id}
-                  onClick={() => handleCountryChange(country.id)}
-                  className={`relative overflow-hidden p-4 rounded-2xl font-bold transition-all duration-300 ${selectedCountry === country.id
-                      ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white shadow-xl scale-105'
-                      : 'bg-card/50 backdrop-blur-sm border-2 border-white/10 text-foreground hover:border-blue-500/50'
-                    }`}
-                  whileHover={{ y: -5, scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: countries.findIndex(c => c.id === country.id) * 0.05 }}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-3xl">{country.flag}</span>
-                    <span className="text-xs font-bold text-center">{country.name}</span>
-                  </div>
-                  {selectedCountry === country.id && (
-                    <motion.div
-                      layoutId="country-indicator"
-                      className="absolute inset-0 border-4 border-white/30 rounded-2xl"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </motion.button>
+        <section>
+          <div className="section-title mb-6">
+            <div>
+              <div className="section-label">New releases</div>
+              <h2 className="section-heading mt-2">Latest additions with a cleaner full-width layout</h2>
+            </div>
+            <button onClick={() => navigate('/browse')} className="btn-quiet">
+              Browse all
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {releaseItems.map((item, index) => (
+              <StoryCard
+                key={getMediaId(item)}
+                item={item}
+                onOpen={openMovie}
+                className={index === 0 ? 'min-h-[24rem] lg:col-span-2' : 'min-h-[24rem]'}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* More to Explore - Additional Movies Row */}
+        {curatedMovies.length > 8 && (
+          <section>
+            <div className="section-title mb-6">
+              <div>
+                <div className="section-label">More to explore</div>
+                <h2 className="section-heading mt-2">Keep discovering great picks from our editors</h2>
+              </div>
+              <button onClick={() => navigate('/browse')} className="btn-quiet">
+                See more
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {curatedMovies.slice(8, 16).map((item) => (
+                <PosterCard
+                  key={getMediaId(item)}
+                  item={item}
+                  onOpen={openMovie}
+                  onWatch={watchMovie}
+                />
               ))}
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-center pt-4">
-            <motion.button
-              onClick={handleSurpriseMe}
-              className="btn-primary flex items-center gap-3 px-10 py-4 text-xl rounded-full shadow-xl"
-              disabled={surpriseLoading}
-              whileHover={{ scale: 1.08, boxShadow: "0 10px 40px rgba(147, 51, 234, 0.4)" }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Shuffle className="w-6 h-6" />
-              {surpriseLoading ? 'Surprising...' : 'Surprise Me!'}
-            </motion.button>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Movies Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {loading ? (
-          Array(8).fill(0).map((_, index) => <LoadingSkeleton key={index} />)
-        ) : (
-          filteredMovies.map((movie) => (
-            <MovieCard
-              key={movie.imdbID}
-              movie={movie}
-              onAISummary={handleAISummary}
-            />
-          ))
+          </section>
         )}
       </div>
-
-      {!loading && filteredMovies.length === 0 && (
-        <div className="text-center py-20">
-          <p className="text-muted-foreground text-xl">No movies found. Try a different search.</p>
-        </div>
-      )}
-
-      {!loading && totalPages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      )}
-
-
-      {/* AI Summary Modal */}
-      {aiSummaryModal && (
-        <motion.div
-          className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-          onClick={() => setAiSummaryModal(null)}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className="bg-gradient-to-br from-card to-card/90 rounded-2xl p-8 max-w-3xl w-full max-h-[85vh] overflow-y-auto border-2 border-purple-500/30 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <motion.div
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              >
-                <Sparkles className="w-8 h-8 text-purple-500" />
-              </motion.div>
-              <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent">AI Summary</h2>
-            </div>
-            <h3 className="text-2xl font-bold text-foreground mb-6 border-b-2 border-purple-500/30 pb-4">
-              {aiSummaryModal.movie.Title}
-            </h3>
-            <p className="text-muted-foreground leading-relaxed text-lg mb-6">
-              {aiSummaryModal.summary}
-            </p>
-            <motion.button
-              onClick={() => setAiSummaryModal(null)}
-              className="btn-primary w-full py-4 text-lg rounded-xl"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Close
-            </motion.button>
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Surprise Me Modal */}
-      {surpriseModal && (
-        <motion.div
-          className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-          onClick={() => setSurpriseModal(null)}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className="bg-gradient-to-br from-card to-card/90 rounded-2xl p-8 max-w-3xl w-full border-2 border-blue-500/30 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <motion.div
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              >
-                <Shuffle className="w-8 h-8 text-blue-500" />
-              </motion.div>
-              <h2 className="text-3xl font-bold gradient-header bg-clip-text text-transparent">Surprise Pick!</h2>
-            </div>
-            <h3 className="text-2xl font-bold text-foreground mb-6 border-b-2 border-blue-500/30 pb-4">
-              {surpriseModal.movie.Title}
-            </h3>
-            <p className="text-muted-foreground leading-relaxed text-lg mb-6">
-              {surpriseModal.reason}
-            </p>
-            <motion.button
-              onClick={() => setSurpriseModal(null)}
-              className="btn-primary w-full py-4 text-lg rounded-xl"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Close
-            </motion.button>
-          </motion.div>
-        </motion.div>
-      )}
     </div>
   );
-};
-
-export default Home;
-
+}

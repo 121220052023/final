@@ -54,7 +54,7 @@ const About = () => {
 
         {/* Mission Statement */}
         <motion.div
-          className="bg-card border border-border rounded-lg p-8 mb-16"
+          className="bg-card rounded-lg p-8 mb-16"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -63,7 +63,7 @@ const About = () => {
           <p className="text-muted-foreground text-lg leading-relaxed">
             We believe that discovering great movies should be effortless and enjoyable. Our mission is to leverage 
             cutting-edge AI technology to provide personalized, intelligent movie recommendations that match your 
-            unique taste and preferences. Whether you're looking for a classic masterpiece or the latest blockbuster, 
+            unique taste and preferences. Whether you&apos;re looking for a classic masterpiece or the latest blockbuster, 
             Ocean of Movies is here to guide your cinematic journey.
           </p>
         </motion.div>
@@ -75,7 +75,7 @@ const About = () => {
             {features.map((feature, index) => (
               <motion.div
                 key={feature.title}
-                className="bg-card border border-border rounded-lg p-6 hover:shadow-xl transition-shadow"
+                className="bg-card rounded-lg p-6 glass-immersive transition-glass-immersive"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 + index * 0.1 }}
@@ -90,7 +90,7 @@ const About = () => {
 
         {/* Tech Stack */}
         <motion.div
-          className="bg-card border border-border rounded-lg p-8"
+          className="bg-card rounded-lg p-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}

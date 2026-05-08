@@ -89,7 +89,7 @@ const Pricing = () => {
             Frequently Asked Questions
           </h2>
           <div className="space-y-6">
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-card rounded-lg p-6">
               <h3 className="text-xl font-semibold text-foreground mb-2">
                 Can I switch plans anytime?
               </h3>
@@ -97,7 +97,7 @@ const Pricing = () => {
                 Yes! You can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.
               </p>
             </div>
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-card rounded-lg p-6">
               <h3 className="text-xl font-semibold text-foreground mb-2">
                 What payment methods do you accept?
               </h3>
@@ -105,7 +105,7 @@ const Pricing = () => {
                 We accept all major credit cards, PayPal, and various digital payment methods.
               </p>
             </div>
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-card rounded-lg p-6">
               <h3 className="text-xl font-semibold text-foreground mb-2">
                 Is there a free trial for paid plans?
               </h3>

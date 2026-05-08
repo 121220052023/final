@@ -27,7 +27,7 @@ const PricingCard = ({ title, price, features, icon: Icon, popular = false }) =>
       <ul className="space-y-3 mb-8">
         {features.map((feature, index) => (
           <li key={index} className="flex items-start gap-3">
-            <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
             <span className="text-muted-foreground">{feature}</span>
           </li>
         ))}

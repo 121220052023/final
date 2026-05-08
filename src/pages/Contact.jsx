@@ -40,7 +40,7 @@ const Contact = () => {
             Get In Touch
           </h1>
           <p className="text-muted-foreground text-xl">
-            Have questions or feedback? We'd love to hear from you!
+            Have questions or feedback? We&apos;d love to hear from you!
           </p>
         </motion.div>
 
@@ -51,7 +51,7 @@ const Contact = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <div className="bg-card border border-border rounded-lg p-8">
+            <div className="bg-card rounded-lg p-8">
               <h2 className="text-2xl font-bold text-foreground mb-6">Send us a message</h2>
               
               {submitted ? (
@@ -60,10 +60,10 @@ const Contact = () => {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                 >
-                  <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
+                  <CheckCircle className="w-16 h-16 text-primary mb-4" />
                   <h3 className="text-xl font-bold text-foreground mb-2">Message Sent!</h3>
                   <p className="text-muted-foreground text-center">
-                    Thank you for reaching out. We'll get back to you soon.
+                    Thank you for reaching out. We&apos;ll get back to you soon.
                   </p>
                 </motion.div>
               ) : (
@@ -82,7 +82,7 @@ const Contact = () => {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-background text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
+                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
                       placeholder="Your name"
                     />
                   </div>
@@ -101,7 +101,7 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-background text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
+                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
                       placeholder="your.email@example.com"
                     />
                   </div>
@@ -120,7 +120,7 @@ const Contact = () => {
                       onChange={handleChange}
                       required
                       rows={6}
-                      className="w-full px-4 py-3 bg-background text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all resize-none"
+                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all resize-none"
                       placeholder="Tell us what's on your mind..."
                     />
                   </div>
@@ -145,7 +145,7 @@ const Contact = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <div className="bg-card border border-border rounded-lg p-8">
+            <div className="bg-card rounded-lg p-8">
               <h2 className="text-2xl font-bold text-foreground mb-6">Contact Information</h2>
               
               <div className="space-y-6">
@@ -171,7 +171,7 @@ const Contact = () => {
               </div>
             </div>
 
-            <div className="bg-card border border-border rounded-lg p-8">
+            <div className="bg-card rounded-lg p-8">
               <h2 className="text-2xl font-bold text-foreground mb-4">FAQ</h2>
               <p className="text-muted-foreground mb-4">
                 Before reaching out, check our frequently asked questions. You might find your answer there!

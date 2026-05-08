@@ -49,6 +49,15 @@ export const tmdbApi = {
   getMovieVideos: async (movieId) => {
     return makeRequest(`/movie/${movieId}/videos`, { language: 'en-US' });
   },
+  getMovieCredits: async (movieId) => {
+    return makeRequest(`/movie/${movieId}/credits`, { language: 'en-US' });
+  },
+  getSimilarMovies: async (movieId) => {
+    return makeRequest(`/movie/${movieId}/similar`, { language: 'en-US' });
+  },
+  getMovieRecommendations: async (movieId) => {
+    return makeRequest(`/movie/${movieId}/recommendations`, { language: 'en-US' });
+  },
 
   // ===== TV SHOWS =====
   getPopularTVShows: async (page = 1) => {
@@ -77,6 +86,15 @@ export const tmdbApi = {
   },
   getTVSeasonDetails: async (tvId, seasonNumber) => {
     return makeRequest(`/tv/${tvId}/season/${seasonNumber}`, { language: 'en-US' });
+  },
+  getTVCredits: async (tvId) => {
+    return makeRequest(`/tv/${tvId}/credits`, { language: 'en-US' });
+  },
+  getSimilarTVShows: async (tvId) => {
+    return makeRequest(`/tv/${tvId}/similar`, { language: 'en-US' });
+  },
+  getTVRecommendations: async (tvId) => {
+    return makeRequest(`/tv/${tvId}/recommendations`, { language: 'en-US' });
   },
 
   // ===== ARABIC & RAMADAN =====

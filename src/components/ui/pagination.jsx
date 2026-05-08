@@ -11,7 +11,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       >
         Previous
       </Button>
-      <span className="text-foreground font-medium px-4 py-2 rounded-lg bg-card border border-border">
+      <span className="text-foreground font-medium px-4 py-2 rounded-lg bg-card">
         {currentPage}
       </span>
       <Button

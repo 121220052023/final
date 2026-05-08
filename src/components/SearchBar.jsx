@@ -65,12 +65,12 @@ const SearchBar = ({ onSearch, searchType = 'movie' }) => {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder={getPlaceholder()}
-            className="w-full pl-16 pr-32 py-6 bg-card/50 backdrop-blur-xl text-foreground border-2 border-white/10 rounded-3xl focus:outline-none focus:border-purple-500/50 transition-all duration-300 text-lg font-medium placeholder:text-muted-foreground/60 shadow-xl"
+            className="w-full pl-16 pr-32 py-6 bg-card/50 backdrop-blur-xl text-foreground rounded-3xl focus:outline-none -500/50 transition-all duration-300 text-lg font-medium placeholder:text-muted-foreground/60 glass-immersive"
           />
           
           <motion.button
             type="submit"
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-8 py-3 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 text-white rounded-2xl font-bold transition-all duration-300 hover:shadow-xl hover:shadow-purple-600/50 flex items-center gap-2"
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-8 py-3 bg-gradient-to-r from-purple-600 via-blue-600 to-purple-600 text-white rounded-2xl font-bold transition-all duration-300 glass-immersive -600/50 flex items-center gap-2"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >

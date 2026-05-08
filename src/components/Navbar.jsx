@@ -1,167 +1,354 @@
-import { Link } from 'react-router-dom';
-import { Film, Menu, X, Moon, Sun } from 'lucide-react';
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Bell, LogOut, Menu, Moon, Search, Shield, Sparkles, Sun, User, X, ChevronDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useTheme } from 'next-themes';
-import { Switch } from '../components/ui/switch';
-import GoogleSignIn from './GoogleSignIn';
+import { useAuth } from '../context/AuthContext';
+import { useParentalControls } from '../context/ParentalControlContext';
 
-const Navbar = () => {
+const primaryLinks = [
+  { label: 'Home', to: '/' },
+  { label: 'For You', to: '/for-you' },
+  { label: 'Movies', to: '/browse' },
+  { label: 'Series', to: '/tv-shows' },
+  { label: 'Books', to: '/books' },
+];
+
+const utilityLinks = [
+  { label: 'Trending', to: '/trending' },
+  { label: 'Watchlist', to: '/watchlist' },
+  { label: 'Liked', to: '/liked-movies' },
+  { label: 'History', to: '/history' },
+  { label: 'Arabic', to: '/arabic' },
+  { label: 'Actors', to: '/actors' },
+  { label: 'Live TV', to: '/live-tv' },
+  { label: '⚽ Live Scores', to: '/live-scores' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'About', to: '/about' },
+  { label: 'Contact', to: '/contact' },
+];
+
+const brandText = 'Ocean of Movies';
+
+export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const [query, setQuery] = useState('');
+  const [showUtilityMenu, setShowUtilityMenu] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const { user, profile, signOut } = useAuth();
+  const { isParent } = useParentalControls();
+  const navigate = useNavigate();
 
-  const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Browse', path: '/browse' },
-    { name: 'Trending', path: '/trending' },
-    { name: 'TV Shows', path: '/tv-shows' },
-    { name: '🌙 Arabic', path: '/arabic' },
-    { name: '📺 Live TV', path: '/live-tv' },
-    { name: 'Actors', path: '/actors' },
-    { name: 'Watchlist', path: '/watchlist' },
-    { name: 'Liked', path: '/liked-movies' },
-  ];
+  const username = useMemo(() => {
+    if (profile?.username) return profile.username;
+    if (profile?.full_name) return profile.full_name;
+    if (user?.email) return user.email.split('@')[0];
+    return 'Guest';
+  }, [profile?.username, profile?.full_name, user?.email]);
 
-  const moreLinks = [
-    { name: 'Profile', path: '/profile' },
-    { name: 'Pricing', path: '/pricing' },
-    { name: 'About', path: '/about' },
-    { name: 'Contact', path: '/contact' },
-  ];
+  const submitSearch = (event) => {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+    setIsOpen(false);
+    setShowUtilityMenu(false);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    setIsOpen(false);
+    setShowUtilityMenu(false);
+  };
 
   return (
-    <nav className="sticky top-0 z-50 backdrop-blur-xl bg-card/80 border-b border-white/10 shadow-lg shadow-purple-500/10">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <motion.div
-              whileHover={{ rotate: 360, scale: 1.1 }}
-              transition={{ duration: 0.6 }}
-              className="relative"
-            >
-              <Film className="w-8 h-8 text-purple-500" />
-              <motion.div
-                className="absolute inset-0 bg-purple-500 rounded-full blur-xl opacity-0 group-hover:opacity-50"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </motion.div>
-            <span className="text-xl font-black gradient-header bg-clip-text text-transparent tracking-tight">
-              Ocean of Movies
-            </span>
-          </Link>
+    <nav className="fixed inset-x-0 top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border transition-all duration-300">
+      <div className="page-shell-wide py-3">
+        <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 lg:gap-6">
+              <Link to="/" className="flex shrink-0 items-center gap-2 transition-transform hover:scale-105">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-lg shadow-primary/20">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div className="display-font text-xl font-black tracking-tighter text-foreground sm:text-2xl">
+                  {brandText}
+                </div>
+              </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link, index) => (
-              <motion.div
-                key={link.path}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
-              >
-                <Link
-                  to={link.path}
-                  className="relative text-foreground hover:text-purple-500 transition-all duration-300 font-semibold group px-2.5 py-1.5 text-sm"
-                >
-                  <span className="relative z-10">{link.name}</span>
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                    layoutId="navbar-hover"
-                  />
-                </Link>
-              </motion.div>
-            ))}
-
-            {/* More Dropdown */}
-            <div className="relative group/more">
-              <button className="text-foreground hover:text-purple-500 transition-all duration-300 font-semibold px-2.5 py-1.5 text-sm">
-                More ▾
-              </button>
-              <div className="absolute right-0 top-full mt-1 w-40 bg-card/95 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl opacity-0 invisible group-hover/more:opacity-100 group-hover/more:visible transition-all duration-200 py-2 z-50">
-                {moreLinks.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className="block px-4 py-2 text-sm text-foreground hover:text-purple-500 hover:bg-white/5 transition-all font-semibold"
+              <div className="hidden items-center gap-1 xl:flex">
+                {primaryLinks.map((link) => (
+                  <NavLink 
+                    key={link.to} 
+                    to={link.to} 
+                    className={({ isActive }) => 
+                      `px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+                        isActive 
+                          ? 'bg-primary/10 text-primary' 
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`
+                    }
                   >
-                    {link.name}
-                  </Link>
+                    {link.label}
+                  </NavLink>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
-              <motion.div
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 backdrop-blur-sm rounded-full border border-white/10"
-                whileHover={{ scale: 1.05 }}
-              >
-                <Sun className="h-4 w-4 text-yellow-500" />
-                <Switch
-                  checked={theme === 'dark'}
-                  onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+            <div className="hidden items-center gap-2 xl:flex">
+              <form onSubmit={submitSearch} className="relative group">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search movies..."
+                  className="h-9 w-48 lg:w-56 xl:w-64 rounded-xl border border-border bg-muted/50 pl-10 pr-4 text-sm font-medium transition-all focus:border-primary focus:bg-background focus:ring-4 focus:ring-primary/10 outline-none"
+                  type="search"
                 />
-                <Moon className="h-4 w-4 text-blue-400" />
-              </motion.div>
-              <GoogleSignIn />
+              </form>
+
+              <div className="flex items-center gap-1.5 px-1.5 h-10 rounded-xl border border-border bg-muted/30">
+                <button
+                  onClick={() => setTheme('light')}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    resolvedTheme === 'light' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-label="Light mode"
+                >
+                  <Sun className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setTheme('dark')}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    resolvedTheme === 'dark' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-label="Dark mode"
+                >
+                  <Moon className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div
+                className="relative"
+                onMouseEnter={() => setShowUtilityMenu(true)}
+                onMouseLeave={() => setShowUtilityMenu(false)}
+              >
+                <button className="btn-secondary h-10 px-4 rounded-xl font-bold flex items-center gap-2">
+                  <span>Explore</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showUtilityMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {showUtilityMenu ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 top-full mt-2 grid min-w-[220px] gap-1 rounded-2xl bg-card border border-border p-2 shadow-2xl z-50"
+                    >
+                      {utilityLinks.map((link) => (
+                        <NavLink
+                          key={link.to + link.label}
+                          to={link.to}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
+                              isActive
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            }`
+                          }
+                        >
+                          {link.label}
+                        </NavLink>
+                      ))}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <div className="h-6 w-px bg-border mx-1" />
+
+              {user ? (
+                <div className="flex items-center gap-2">
+                  {isParent && (
+                    <Link
+                      to="/parent/dashboard"
+                      className="flex items-center gap-2 h-10 px-3 rounded-xl border border-border bg-card hover:border-amber-500/50 hover:text-amber-500 transition-all group"
+                      title="Parent Dashboard"
+                    >
+                      <Shield className="h-4 w-4 text-amber-500" />
+                      <span className="hidden lg:inline text-xs font-bold text-foreground group-hover:text-amber-500 transition-colors">
+                        Parent
+                      </span>
+                    </Link>
+                  )}
+
+                  <Link 
+                    to="/profile" 
+                    className="flex items-center gap-3 h-10 pl-3 pr-4 rounded-xl border border-border bg-card hover:border-primary transition-all group"
+                  >
+                    <div className="h-7 w-7 rounded-lg overflow-hidden">
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                          {user.email?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <span className="max-w-[8rem] truncate text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+                      {username}
+                    </span>
+                  </Link>
+
+                  <button 
+                    onClick={handleLogout} 
+                    className="btn-secondary h-10 w-10 p-0 rounded-xl"
+                    title="Logout"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link to="/login" className="btn-ghost h-10 px-4 font-bold">
+                    Sign in
+                  </Link>
+                  <Link to="/signup" className="btn-primary h-10 px-5 rounded-xl font-bold shadow-lg shadow-primary/20">
+                    Get Started
+                  </Link>
+                </div>
+              )}
             </div>
+
+            <button
+              onClick={() => setIsOpen((open) => !open)}
+              className="btn-secondary px-2.5 py-1.5 xl:hidden"
+              aria-label="Open navigation"
+            >
+              {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
 
-          {/* Mobile Menu Button */}
-          <motion.button
-            onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden text-foreground hover:text-purple-500 transition-colors p-2 rounded-lg hover:bg-white/5"
-            whileTap={{ scale: 0.9 }}
-          >
-            {isOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
-          </motion.button>
-        </div>
-
-        {/* Mobile Navigation */}
         <AnimatePresence>
-          {isOpen && (
+          {isOpen ? (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="lg:hidden overflow-hidden bg-card/50 backdrop-blur-xl rounded-2xl mt-2 mb-4 border border-white/10"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="glass-immersive mt-3 rounded-[1.6rem] p-4 xl:hidden"
             >
-              <div className="py-4 px-4 space-y-1">
-                {[...navLinks, ...moreLinks].map((link, index) => (
-                  <motion.div
-                    key={link.path}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                  >
-                    <Link
-                      to={link.path}
-                      onClick={() => setIsOpen(false)}
-                      className="block text-foreground hover:text-purple-500 transition-all duration-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-white/5"
-                    >
-                      {link.name}
-                    </Link>
-                  </motion.div>
-                ))}
-                <div className="flex items-center justify-center gap-3 pt-3 px-4 py-3 bg-white/5 rounded-xl">
-                  <Sun className="h-5 w-5 text-yellow-500" />
-                  <Switch
-                    checked={theme === 'dark'}
-                    onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+              <form onSubmit={submitSearch} className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search movies, series, books..."
+                    className="text-input rounded-full pl-11 pr-4 py-3"
+                    type="search"
                   />
-                  <Moon className="h-5 w-5 text-blue-400" />
                 </div>
-                <div className="pt-2">
-                  <GoogleSignIn />
+              </form>
+
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                {primaryLinks.map((link) => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `rounded-[1rem] px-4 py-3 text-sm font-semibold ${
+                        isActive
+                          ? 'bg-primary text-white'
+                          : 'border border-border bg-card text-muted-foreground'
+                      }`
+                    }
+                  >
+                    {link.label}
+                  </NavLink>
+                ))}
+              </div>
+
+              <details className="mb-4 rounded-[1.2rem] border border-border bg-card">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
+                  More options
+                </summary>
+                <div className="grid grid-cols-2 gap-2 p-2">
+                  {utilityLinks.map((link) => (
+                    <NavLink
+                      key={link.to + link.label}
+                      to={link.to}
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `rounded-[1rem] px-4 py-3 text-sm font-semibold ${
+                          isActive
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-muted'
+                        }`
+                      }
+                    >
+                      {link.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
+
+              <div className="mb-4 flex items-center justify-between rounded-[1.2rem] border border-border bg-card px-4 py-3">
+                <span className="text-sm font-semibold text-foreground">Appearance</span>
+                <div className="flex items-center gap-1 rounded-full bg-muted p-1">
+                  <button
+                    onClick={() => setTheme('light')}
+                    className={`rounded-full px-3 py-2 ${resolvedTheme === 'light' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                  >
+                    <Sun className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setTheme('dark')}
+                    className={`rounded-full px-3 py-2 ${resolvedTheme === 'dark' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                  >
+                    <Moon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-border bg-card px-4 py-3">
+                <div className="flex items-center gap-3">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <User className="h-4 w-4" />
+                    </span>
+                  )}
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{username}</div>
+                    <div className="text-xs text-muted-foreground">{user ? 'Signed in' : 'Guest'}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isParent && (
+                    <Link to="/parent/dashboard" onClick={() => setIsOpen(false)} className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5">
+                      <Shield className="h-3.5 w-3.5 text-amber-500" />
+                      Parent
+                    </Link>
+                  )}
+
+                  {user ? (
+                    <button onClick={handleLogout} className="btn-secondary px-4 py-2 text-sm">
+                      Logout
+                    </button>
+                  ) : (
+                    <Link to="/login" onClick={() => setIsOpen(false)} className="btn-primary px-4 py-2 text-sm">
+                      Sign in
+                    </Link>
+                  )}
                 </div>
               </div>
             </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
       </div>
     </nav>
   );
-};
-
-export default Navbar;
+}

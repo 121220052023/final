@@ -11,16 +11,17 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
 
-  const isMovieInWatchlist = watchlist.some((item) => item.imdbID === movie.imdbID);
-  const isMovieLiked = likedMovies.some((item) => item.imdbID === movie.imdbID);
+  const movieId = movie.id || movie.imdbID;
+  const isMovieInWatchlist = watchlist.some((item) => (item.id || item.imdbID) === movieId);
+  const isMovieLiked = likedMovies.some((item) => (item.id || item.imdbID) === movieId);
 
   const handleMoreInfo = () => {
-    navigate(`/movie/${movie.imdbID}`, { state: { type: movie.Type } });
+    navigate(`/movie/${movieId}`, { state: { type: movie.Type || movie.media_type } });
   };
 
   const handleWatchNow = (e) => {
     e.stopPropagation();
-    navigate(`/watch/${movie.imdbID}`, { state: { type: movie.Type } });
+    navigate(`/watch/${movieId}`, { state: { type: movie.Type || movie.media_type } });
   };
 
   const handleAISummary = (e) => {
@@ -31,7 +32,7 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
   const handleWatchlistToggle = (e) => {
     e.stopPropagation();
     if (isMovieInWatchlist) {
-      removeFromWatchlist(movie.imdbID);
+      removeFromWatchlist(movieId);
     } else {
       addToWatchlist(movie);
     }
@@ -40,21 +41,28 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
   const handleLikedToggle = (e) => {
     e.stopPropagation();
     if (isMovieLiked) {
-      removeFromLikedMovies(movie.imdbID);
+      removeFromLikedMovies(movieId);
     } else {
       addToLikedMovies(movie);
     }
   };
 
+  const posterUrl = movie.Poster 
+    ? (movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster')
+    : movie.poster_path 
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+      : 'https://via.placeholder.com/300x450?text=No+Poster';
+  
+  const titleText = movie.Title || movie.title || 'Unknown';
+  const yearText = movie.Year || (movie.release_date ? movie.release_date.substring(0, 4) : '');
+
   return (
     <motion.div
-      className="movie-card relative group overflow-hidden"
+      className="group cursor-pointer relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ y: -8 }}
     >
       {/* Favorite Button */}
       <motion.button
@@ -68,14 +76,12 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
         />
       </motion.button>
 
-      {/* Movie Poster */}
-      <div className="relative h-96 overflow-hidden">
-        <motion.img
-          src={movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster'}
-          alt={movie.Title}
+      {/* Movie Poster Wrapper */}
+      <div className="relative aspect-[2/3] rounded-lg overflow-hidden mb-4 bg-surface-container-low transition-transform duration-500 group-hover:scale-[1.03] group-hover:shadow-[0_20px_40px_rgba(124,58,237,0.15)]">
+        <img
+          src={posterUrl}
+          alt={titleText}
           className="w-full h-full object-cover"
-          whileHover={{ scale: 1.1 }}
-          transition={{ duration: 0.5 }}
         />
 
         {/* Hover Overlay */}
@@ -89,7 +95,7 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
             >
               <motion.button
                 onClick={handleWatchNow}
-                className="flex items-center gap-2 w-full justify-center text-white font-bold px-4 py-3 rounded-xl shadow-xl"
+                className="flex items-center gap-2 w-full justify-center text-white font-bold px-4 py-3 rounded-xl glass-immersive"
                 style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)' }}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -102,7 +108,7 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
               </motion.button>
               <motion.button
                 onClick={handleMoreInfo}
-                className="btn-primary flex items-center gap-2 w-full justify-center shadow-xl"
+                className="btn-primary flex items-center gap-2 w-full justify-center glass-immersive"
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
@@ -114,7 +120,7 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
               </motion.button>
               <motion.button
                 onClick={handleAISummary}
-                className="btn-primary flex items-center gap-2 w-full justify-center shadow-xl"
+                className="btn-primary flex items-center gap-2 w-full justify-center glass-immersive"
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15 }}
@@ -126,7 +132,7 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
               </motion.button>
               <motion.button
                 onClick={handleWatchlistToggle}
-                className={`${isMovieInWatchlist ? 'bg-gradient-to-r from-green-600 to-emerald-600' : 'btn-primary'} flex items-center gap-2 w-full justify-center shadow-xl`}
+                className={`${isMovieInWatchlist ? 'btn-soul' : 'btn-primary'} flex items-center gap-2 w-full justify-center glass-immersive `}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
@@ -147,19 +153,23 @@ const MovieCard = ({ movie, onAISummary = () => { } }) => {
 
       {/* Movie Info */}
       <div className="p-5 bg-gradient-to-b from-card to-card/80">
-        <h3 className="text-lg font-bold text-foreground truncate mb-1">{movie.Title}</h3>
+        <h3 className="text-lg font-bold text-foreground truncate mb-1">{titleText}</h3>
         <div className="flex items-center justify-between">
-          <p className="text-purple-500 text-sm font-semibold">{movie.Year}</p>
-          {movie.rating && (
+          <p className="text-purple-500 text-sm font-semibold">{yearText}</p>
+          {(movie.rating || movie.vote_average) && (
             <div className="flex items-center gap-1">
               <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              <span className="text-yellow-500 font-bold text-sm">{typeof movie.rating === 'number' ? movie.rating.toFixed(1) : movie.rating}</span>
+              <span className="text-yellow-500 font-bold text-sm">
+                {typeof (movie.rating || movie.vote_average) === 'number' 
+                  ? (movie.rating || movie.vote_average).toFixed(1) 
+                  : (movie.rating || movie.vote_average)}
+              </span>
             </div>
           )}
         </div>
-        {movie.Plot && (
+        {(movie.Plot || movie.overview) && (
           <p className="text-muted-foreground text-sm mt-2 line-clamp-2 leading-relaxed">
-            {movie.Plot}
+            {movie.Plot || movie.overview}
           </p>
         )}
       </div>

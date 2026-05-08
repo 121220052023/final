@@ -1,240 +1,281 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Clock3, Heart, MinusCircle, PlusCircle, TrendingUp } from 'lucide-react';
 import { tmdbApi } from '../services/tmdb';
-import { TrendingUp, Star, Calendar, Film, Heart, PlusCircle, MinusCircle, Trophy } from 'lucide-react';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
+import ContentFilter from '../components/ContentFilter';
 
-const Trending = () => {
+const windows = [
+  { id: 'day', label: 'Today' },
+  { id: 'week', label: 'This Week' },
+];
+
+function normalizeMovie(movie) {
+  if (!movie || !movie.id) return null;
+  
+  return {
+    imdbID: movie.id.toString(),
+    Title: movie.title,
+    Year: movie.release_date?.split('-')[0] || 'N/A',
+    Poster: movie.poster_path ? `https://image.tmdb.org/t/p/w780${movie.poster_path}` : 'https://via.placeholder.com/700x1050?text=No+Image',
+    Plot: movie.overview || 'No plot available',
+    rating: movie.vote_average,
+  };
+}
+
+export default function Trending() {
   const [trendingMovies, setTrendingMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [timeWindow, setTimeWindow] = useState('week');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const navigate = useNavigate();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
 
   useEffect(() => {
-    fetchTrendingMovies(timeWindow);
-  }, [timeWindow]);
+    let cancelled = false;
 
-  const fetchTrendingMovies = async (window) => {
-    setLoading(true);
-    try {
-      const data = await tmdbApi.getTrendingMovies(window);
-      setTrendingMovies(data.results || []);
-    } catch (error) {
-      console.error('Error fetching trending movies:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const fetchTrending = async () => {
+      setLoading(true);
+      try {
+        const data = await tmdbApi.getTrendingMovies(timeWindow, page);
+        if (!cancelled) {
+          setTrendingMovies((data.results || []).map(normalizeMovie).filter(Boolean));
+          setTotalPages(Math.min(data.total_pages || 1, 500));
+        }
+      } catch (error) {
+        console.error('Error fetching trending movies:', error);
+        if (!cancelled) setTrendingMovies([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
 
-  const convertToMovieFormat = (tmdbMovie) => ({
-    imdbID: tmdbMovie.id.toString(),
-    Title: tmdbMovie.title,
-    Year: tmdbMovie.release_date?.split('-')[0] || 'N/A',
-    Poster: tmdbMovie.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}` : 'N/A',
-    Plot: tmdbMovie.overview || 'No plot available',
-  });
+    fetchTrending();
+    return () => {
+      cancelled = true;
+    };
+  }, [timeWindow, page]);
 
-  const isInWatchlist = (movieId) => watchlist.some(m => m.imdbID === movieId.toString());
-  const isLiked = (movieId) => likedMovies.some(m => m.imdbID === movieId.toString());
+  const normalizedMovies = trendingMovies.map(normalizeMovie);
+  const featured = normalizedMovies[0];
 
-  const handleWatchlistToggle = (e, movie) => {
-    e.stopPropagation();
-    const formattedMovie = convertToMovieFormat(movie);
-    if (isInWatchlist(movie.id)) {
-      removeFromWatchlist(movie.id.toString());
+  const isInWatchlist = (id) => watchlist.some((movie) => movie.imdbID === id);
+  const isLiked = (id) => likedMovies.some((movie) => movie.imdbID === id);
+
+  const toggleWatchlist = (event, movie) => {
+    event.stopPropagation();
+    if (isInWatchlist(movie.imdbID)) {
+      removeFromWatchlist(movie.imdbID);
     } else {
-      addToWatchlist(formattedMovie);
+      addToWatchlist(movie);
     }
   };
 
-  const handleLikeToggle = (e, movie) => {
-    e.stopPropagation();
-    const formattedMovie = convertToMovieFormat(movie);
-    if (isLiked(movie.id)) {
-      removeFromLikedMovies(movie.id.toString());
+  const toggleLike = (event, movie) => {
+    event.stopPropagation();
+    if (isLiked(movie.imdbID)) {
+      removeFromLikedMovies(movie.imdbID);
     } else {
-      addToLikedMovies(formattedMovie);
+      addToLikedMovies(movie);
     }
   };
 
-  const getRankColor = (index) => {
-    if (index === 0) return 'from-yellow-500 to-yellow-600';
-    if (index === 1) return 'from-gray-400 to-gray-500';
-    if (index === 2) return 'from-orange-600 to-orange-700';
-    return 'from-purple-600 to-blue-600';
+  const handleTimeWindowChange = (window) => {
+    setTimeWindow(window);
+    setPage(1);
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex items-center justify-center gap-2 mt-12 py-8">
+        <button
+          onClick={() => {
+            setPage(p => Math.max(1, p - 1));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          disabled={page === 1}
+          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          Previous
+        </button>
+
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let pageNum;
+          if (totalPages <= 5) {
+            pageNum = i + 1;
+          } else if (page <= 3) {
+            pageNum = i + 1;
+          } else if (page >= totalPages - 2) {
+            pageNum = totalPages - 4 + i;
+          } else {
+            pageNum = page - 2 + i;
+          }
+
+          return (
+            <button
+              key={pageNum}
+              onClick={() => {
+                setPage(pageNum);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+                page === pageNum
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-white/70 hover:bg-accent hover:text-white'
+              }`}
+            >
+              {pageNum}
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => {
+            setPage(p => Math.min(totalPages, p + 1));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          disabled={page === totalPages}
+          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          Next
+        </button>
+      </div>
+    );
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 min-h-screen">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="text-center mb-12"
-      >
-        <div className="flex items-center justify-center gap-3 mb-3">
-          <TrendingUp className="w-12 h-12 text-purple-600" />
-          <h1 className="text-5xl font-bold gradient-header bg-clip-text text-transparent">
-            Trending Movies
-          </h1>
+    <ContentFilter
+      movie={featured || { Title: 'Trending', Plot: '', Rated: 'PG' }}
+      fallback={
+        <div className="page-shell pt-32">
+          <div className="glass-immersive rounded-[2rem] p-8 text-center">
+            <h2 className="display-font text-2xl font-bold text-foreground">Trending is unavailable</h2>
+            <p className="mt-3 text-sm text-muted-foreground">This shelf is hidden by the current parental controls.</p>
+          </div>
         </div>
-        <p className="text-muted-foreground text-lg">What's hot right now</p>
-      </motion.div>
+      }
+    >
+      <div className="pb-20 pt-28">
+        <div className="page-shell">
+          <div className="mb-10">
+            <div className="section-label">Trending Movies</div>
+            <h1 className="display-font mt-3 text-4xl font-extrabold text-foreground md:text-6xl">
+              Ranked with more hierarchy
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground md:text-base">
+              The top result leads the page, and everything after that cascades in a stronger order rather than a flat wall.
+            </p>
+          </div>
 
-      {/* Time Window Selector */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex justify-center gap-4 mb-12"
-      >
-        <button
-          onClick={() => setTimeWindow('day')}
-          className={`px-8 py-3 rounded-full font-semibold transition-all duration-300 ${timeWindow === 'day'
-            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg scale-105'
-            : 'bg-card text-foreground hover:bg-accent border border-border'
-            }`}
-        >
-          🔥 Today
-        </button>
-        <button
-          onClick={() => setTimeWindow('week')}
-          className={`px-8 py-3 rounded-full font-semibold transition-all duration-300 ${timeWindow === 'week'
-            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg scale-105'
-            : 'bg-card text-foreground hover:bg-accent border border-border'
-            }`}
-        >
-          📅 This Week
-        </button>
-      </motion.div>
-
-      {/* Movies Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(12)].map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="shimmer rounded-lg h-96"
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {trendingMovies.map((movie, index) => (
-            <motion.div
-              key={movie.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className="movie-card group relative"
-              onClick={() => navigate(`/movie/${movie.id}`, { state: { type: movie.media_type || 'movie' } })}
-            >
-              {/* Ranking Badge */}
-              <div className={`absolute top-2 left-2 z-10 bg-gradient-to-r ${getRankColor(index)} text-white rounded-full w-12 h-12 flex items-center justify-center font-bold shadow-lg`}>
-                {index < 3 ? (
-                  <Trophy className="w-6 h-6" />
-                ) : (
-                  `#${index + 1}`
-                )}
-              </div>
-
-              {/* Like Button */}
+          <div className="mb-8 flex flex-wrap gap-2">
+            {windows.map((item) => (
               <button
-                onClick={(e) => handleLikeToggle(e, movie)}
-                className="absolute top-2 right-2 z-10 bg-black bg-opacity-50 p-2 rounded-full hover:bg-opacity-70 transition-all"
+                key={item.id}
+                onClick={() => handleTimeWindowChange(item.id)}
+                className={`candy-chip ${timeWindow === item.id ? 'active' : ''}`}
               >
-                <Heart
-                  className={`w-5 h-5 ${isLiked(movie.id) ? 'text-red-500 fill-red-500' : 'text-white'}`}
-                />
+                <Clock3 className="h-3.5 w-3.5" />
+                {item.label}
               </button>
+            ))}
+          </div>
 
-              {/* Movie Poster */}
-              <div className="relative h-96 overflow-hidden">
-                <img
-                  src={
-                    movie.poster_path
-                      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-                      : 'https://via.placeholder.com/500x750?text=No+Image'
-                  }
-                  alt={movie.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-
-                {/* Hover Overlay */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  whileHover={{ opacity: 1 }}
-                  className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col items-center justify-end p-4 gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          {loading && normalizedMovies.length === 0 ? (
+            <div className="grid gap-5 md:grid-cols-6">
+              <div className="shimmer h-[30rem] rounded-[1.75rem] md:col-span-4" />
+              <div className="shimmer h-[30rem] rounded-[1.75rem] md:col-span-2" />
+              <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+              <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+              <div className="shimmer h-[18rem] rounded-[1.75rem] md:col-span-2" />
+            </div>
+          ) : normalizedMovies.length === 0 || !featured ? (
+            <div className="glass-immersive rounded-[2rem] p-12 text-center">
+              <TrendingUp className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h2 className="display-font mt-5 text-3xl font-bold text-foreground">No trending titles found</h2>
+            </div>
+          ) : (
+            <>
+              {featured && (
+                <button
+                  onClick={() => navigate(`/movie/${featured.imdbID}`)}
+                  className="movie-card group relative mb-10 overflow-hidden text-left"
                 >
-                  <div className="flex items-center gap-4 text-white text-sm mb-2">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold">{movie.vote_average?.toFixed(1)}</span>
+                  <img
+                    src={featured.Poster}
+                    alt={featured.Title}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,9,12,0.96)_0%,rgba(8,9,12,0.78)_46%,rgba(8,9,12,0.12)_100%)]" />
+                  <div className="relative z-10 flex min-h-[28rem] flex-col justify-between p-7">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/18 text-primary">
+                      <TrendingUp className="h-6 w-6" />
                     </div>
-                    {movie.release_date && (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>{movie.release_date.split('-')[0]}</span>
-                      </div>
-                    )}
+                    <div>
+                      <div className="section-label">Top Ranked</div>
+                      <h2 className="display-font mt-3 max-w-2xl text-4xl font-extrabold text-white md:text-5xl">
+                        {featured.Title}
+                      </h2>
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72">
+                        {featured.Plot}
+                      </p>
+                    </div>
                   </div>
+                </button>
+              )}
+
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {normalizedMovies.slice(1).map((movie, index) => (
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/watch/${movie.id}`, { state: { type: movie.media_type || 'movie' } }); }}
-                    className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
+                    key={movie.imdbID}
+                    onClick={() => navigate(`/movie/${movie.imdbID}`)}
+                    className="movie-card group relative overflow-hidden text-left"
                   >
-                    <PlayCircle className="w-4 h-4" />
-                    Watch Now
+                    <div className="absolute left-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white">
+                      #{index + 2}
+                    </div>
+                    <div className="absolute right-3 top-3 z-20 flex flex-col gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                      <button
+                        onClick={(event) => toggleLike(event, movie)}
+                        className="rounded-full bg-black/60 p-2 text-white"
+                      >
+                        <Heart className={`h-4 w-4 ${isLiked(movie.imdbID) ? 'fill-red-500 text-red-500' : ''}`} />
+                      </button>
+                      <button
+                        onClick={(event) => toggleWatchlist(event, movie)}
+                        className="rounded-full bg-black/60 p-2 text-white"
+                      >
+                        {isInWatchlist(movie.imdbID) ? <MinusCircle className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    <div className="aspect-[0.77] overflow-hidden">
+                      <img
+                        src={movie.Poster}
+                        alt={movie.Title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <h3 className="display-font text-lg font-bold text-foreground transition-colors group-hover:text-primary">
+                        {movie.Title}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">{movie.Year} • {movie.rating?.toFixed(1) || 'N/A'} rating</p>
+                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{movie.Plot}</p>
+                    </div>
                   </button>
-                  <button
-                    onClick={(e) => handleWatchlistToggle(e, movie)}
-                    className="btn-secondary w-full flex items-center justify-center gap-2 text-sm mt-2"
-                  >
-                    {isInWatchlist(movie.id) ? (
-                      <>
-                        <MinusCircle className="w-4 h-4" />
-                        Remove from Watchlist
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle className="w-4 h-4" />
-                        Add to Watchlist
-                      </>
-                    )}
-                  </button>
-                </motion.div>
+                ))}
               </div>
 
-              {/* Movie Info */}
-              <div className="p-4">
-                <h3 className="text-lg font-bold text-foreground truncate">{movie.title}</h3>
-                <p className="text-muted-foreground text-sm line-clamp-2 mt-1">
-                  {movie.overview || 'No description available'}
-                </p>
-              </div>
-            </motion.div>
-          ))}
+              {renderPagination()}
+            </>
+          )}
         </div>
-      )}
-
-      {trendingMovies.length === 0 && !loading && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-20"
-        >
-          <Film className="w-24 h-24 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground text-xl">No trending movies found</p>
-        </motion.div>
-      )}
-    </div>
+      </div>
+    </ContentFilter>
   );
-};
-
-export default Trending;
+}

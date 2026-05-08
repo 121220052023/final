@@ -206,14 +206,14 @@ function Sidebar({
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]: group-data-[side=right]:",
           className
         )}
         {...props}>
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm">
+          className="bg-sidebar group-data-[variant=floating]:- flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]: group-data-[variant=floating]:glass-immersive">
           {children}
         </div>
       </div>
@@ -261,7 +261,7 @@ function SidebarRail({
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
+        "hover:after:bg-sidebar- absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "hover:group-data-[collapsible=offcanvas]:bg-sidebar group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full",
@@ -282,7 +282,7 @@ function SidebarInset({
       data-slot="sidebar-inset"
       className={cn(
         "bg-background relative flex w-full flex-1 flex-col",
-        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:glass-immersive md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className
       )}
       {...props} />
@@ -297,7 +297,7 @@ function SidebarInput({
     <Input
       data-slot="sidebar-input"
       data-sidebar="input"
-      className={cn("bg-background h-8 w-full shadow-none", className)}
+      className={cn("bg-background h-8 w-full glass-immersive ", className)}
       {...props} />
   );
 }
@@ -336,7 +336,7 @@ function SidebarSeparator({
     <Separator
       data-slot="sidebar-separator"
       data-sidebar="separator"
-      className={cn("bg-sidebar-border mx-2 w-auto", className)}
+      className={cn("bg-sidebar- mx-2 w-auto", className)}
       {...props} />
   );
 }
@@ -458,7 +458,7 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
-          "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
+          "bg-background glass-immersive -[0_0_0_1px_hsl(var(--sidebar-))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground glass-immersive -[0_0_0_1px_hsl(var(--sidebar-accent))]",
       },
       size: {
         default: "h-8 text-sm",
@@ -606,7 +606,7 @@ function SidebarMenuSub({
       data-slot="sidebar-menu-sub"
       data-sidebar="menu-sub"
       className={cn(
-        "border-sidebar-border mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l px-2.5 py-0.5",
+        "- mx-3.5 flex min-w-0 translate-x-px flex-col gap-1  px-2.5 py-0.5",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
