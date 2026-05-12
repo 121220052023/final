@@ -1,6 +1,8 @@
-import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { createContext, useContext, useCallback, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
 import { watchlistService } from '../services/supabaseService';
+import { supabase } from '../lib/supabase';
 
 const WatchlistContext = createContext();
 
@@ -25,95 +27,135 @@ async function fetchWatchlist(userId, token) {
   return data;
 }
 
+function mapWatchlistItem(item) {
+  return {
+    id: item.movie_id,
+    imdbID: item.movie_id,
+    title: item.title,
+    Title: item.title,
+    year: item.year,
+    Year: item.year,
+    poster_url: item.poster_url,
+    Poster: item.poster_url || 'N/A',
+    type: item.movie_type,
+    Type: item.movie_type,
+  };
+}
+
 export const WatchlistProvider = ({ children }) => {
   const { user, session } = useAuth();
-  const [watchlist, setWatchlist] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data: watchlist = [] } = useQuery({
+    queryKey: ['watchlist', user?.id],
+    queryFn: async () => {
+      if (!user || !session) return [];
+      const data = await fetchWatchlist(user.id, session.access_token);
+      return (data || []).map(mapWatchlistItem);
+    },
+    enabled: !!user && !!session,
+  });
 
   useEffect(() => {
-    if (!user || !session) {
-      setWatchlist([]);
-      setLoading(false);
-      return;
-    }
+    if (!user?.id || !session?.access_token) return;
 
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const data = await fetchWatchlist(user.id, session.access_token);
-
-        if (!cancelled) {
-          if (data && Array.isArray(data)) {
-            const items = data.map(item => ({
-              imdbID: item.movie_id,
-              Title: item.title,
-              Year: item.year,
-              Poster: item.poster_url || 'N/A',
-              Type: item.movie_type,
-            }));
-            setWatchlist(items);
-          } else {
-            setWatchlist([]);
-          }
+    const channel = supabase
+      .channel(`watchlist:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'watchlist',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          queryClient.setQueryData(['watchlist', user.id], (old = []) => {
+            if (payload.eventType === 'INSERT') {
+              const newItem = mapWatchlistItem(payload.new);
+              if (old.some(m => m.id === newItem.id)) return old;
+              return [newItem, ...old];
+            }
+            if (payload.eventType === 'DELETE') {
+              return old.filter(m => m.id !== payload.old.movie_id);
+            }
+            if (payload.eventType === 'UPDATE') {
+              return old.map(m => m.id === payload.old.movie_id ? mapWatchlistItem(payload.new) : m);
+            }
+            return old;
+          });
         }
-      } catch (err) {
-        if (!cancelled) setWatchlist([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
+      supabase.removeChannel(channel);
     };
-  }, [user, session]);
+  }, [user?.id, session?.access_token, queryClient]);
 
-  const addToWatchlist = useCallback(async (movie) => {
-    setWatchlist(prev => {
-      if (prev.some(m => m.imdbID === movie.imdbID)) return prev;
-      return [...prev, movie];
-    });
-    if (user && session) {
-      try {
-        await watchlistService.add(movie, user.id, session.access_token);
-      } catch (error) {
-        // Silently handle error
-      }
-    }
-  }, [user, session]);
+  const addMutation = useMutation({
+    mutationFn: (movie) => watchlistService.add(movie, user.id, session.access_token),
+    onMutate: async (newMovie) => {
+      await queryClient.cancelQueries({ queryKey: ['watchlist', user?.id] });
+      const previousWatchlist = queryClient.getQueryData(['watchlist', user?.id]);
+      queryClient.setQueryData(['watchlist', user?.id], (old) => {
+        const movieId = newMovie.id?.toString() || newMovie.imdbID?.toString();
+        if (old?.some(m => m.id === movieId || m.imdbID === movieId)) return old;
+        return [newMovie, ...(old || [])];
+      });
+      return { previousWatchlist };
+    },
+    onError: (err, newMovie, context) => {
+      queryClient.setQueryData(['watchlist', user?.id], context.previousWatchlist);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist', user?.id] });
+    },
+  });
 
-  const removeFromWatchlist = useCallback(async (imdbID) => {
-    setWatchlist(prev => prev.filter(m => m.imdbID !== imdbID));
-    if (user && session) {
-      try {
-        await watchlistService.remove(imdbID, user.id, session.access_token);
-      } catch (error) {
-        // Silently handle error
-      }
-    }
-  }, [user, session]);
+  const removeMutation = useMutation({
+    mutationFn: (movieId) => watchlistService.remove(movieId, user.id, session.access_token),
+    onMutate: async (movieId) => {
+      await queryClient.cancelQueries({ queryKey: ['watchlist', user?.id] });
+      const previousWatchlist = queryClient.getQueryData(['watchlist', user?.id]);
+      queryClient.setQueryData(['watchlist', user?.id], (old) => (old || []).filter(m => m.id !== movieId && m.imdbID !== movieId));
+      return { previousWatchlist };
+    },
+    onError: (err, movieId, context) => {
+      queryClient.setQueryData(['watchlist', user?.id], context.previousWatchlist);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist', user?.id] });
+    },
+  });
 
-  const clearWatchlist = useCallback(async () => {
-    const itemsToDelete = [...watchlist];
-    setWatchlist([]);
-    if (user && session) {
-      try {
-        for (const item of itemsToDelete) {
-          await watchlistService.remove(item.imdbID, user.id, session.access_token);
-        }
-      } catch (error) {
-        // Silently handle error
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      const itemsToDelete = [...watchlist];
+      for (const item of itemsToDelete) {
+        await watchlistService.remove(item.id || item.imdbID, user.id, session.access_token);
       }
-    }
-  }, [user, session, watchlist]);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['watchlist', user?.id] });
+      const previousWatchlist = queryClient.getQueryData(['watchlist', user?.id]);
+      queryClient.setQueryData(['watchlist', user?.id], []);
+      return { previousWatchlist };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['watchlist', user?.id], context.previousWatchlist);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist', user?.id] });
+    },
+  });
+
+  const addToWatchlist = useCallback((movie) => addMutation.mutate(movie), [addMutation]);
+  const removeFromWatchlist = useCallback((movieId) => removeMutation.mutate(movieId), [removeMutation]);
+  const clearWatchlist = useCallback(() => clearMutation.mutate(), [clearMutation]);
 
   return (
-    <WatchlistContext.Provider
-      value={{ watchlist, addToWatchlist, removeFromWatchlist, clearWatchlist, loading: false }}
-    >
+    <WatchlistContext.Provider value={{ watchlist, addToWatchlist, removeFromWatchlist, clearWatchlist }}>
       {children}
     </WatchlistContext.Provider>
   );
@@ -121,8 +163,6 @@ export const WatchlistProvider = ({ children }) => {
 
 export const useWatchlist = () => {
   const context = useContext(WatchlistContext);
-  if (!context) {
-    throw new Error('useWatchlist must be used within a WatchlistProvider');
-  }
+  if (!context) throw new Error('useWatchlist must be used within a WatchlistProvider');
   return context;
 };

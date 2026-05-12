@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-const TMDB_API_KEY = '554e4ae2d84e5702e3c5df845cf33f51';
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_BEARER_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NTRlNGFlMmQ4NGU1NzAyZTNjNWRmODQ1Y2YzM2Y1MSIsIm5iZiI6MTc2MDcyMTI4OC40NDk5OTk4LCJzdWIiOiI2OGYyNzk4OGE0ZmY3ZTExYjJlYzVhMjciLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.HskVsJiEuNmrE8uUosiM-0TSzmh_Ygvnxwo85-LK0zw';
-
+const TMDB_BEARER_TOKEN = import.meta.env.VITE_TMDB_BEARER_TOKEN;
 const makeRequest = async (endpoint, params = {}) => {
   try {
     const response = await axios.get(`${TMDB_BASE_URL}${endpoint}`, {

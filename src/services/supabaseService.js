@@ -10,6 +10,67 @@ function authHeaders(token) {
   }
 }
 
+async function requestJson(url, token, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...authHeaders(token),
+      ...options.headers,
+    },
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Supabase request failed: ${response.status} - ${err}`)
+  }
+
+  if (response.status === 204) return null
+  const text = await response.text()
+  return text ? JSON.parse(text) : null
+}
+
+function encode(value) {
+  return encodeURIComponent(value ?? '')
+}
+
+function normalizeMovieRow(movie, userId) {
+  return {
+    user_id: userId,
+    movie_id: movie.id?.toString() || movie.imdbID?.toString(),
+    movie_type: movie.type || movie.Type || movie.media_type || 'movie',
+    title: movie.title || movie.Title,
+    poster_url: movie.poster_url || (movie.poster_path
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+      : (movie.Poster && movie.Poster !== 'N/A' ? movie.Poster : null)),
+    year: movie.year || movie.release_date?.substring(0, 4) || movie.Year || null,
+  }
+}
+
+async function findLibraryRow(table, movieId, movieType, userId, token) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=*&user_id=eq.${encode(userId)}&movie_id=eq.${encode(movieId)}&movie_type=eq.${encode(movieType)}&limit=1`
+  const rows = await requestJson(url, token)
+  return Array.isArray(rows) ? rows[0] : null
+}
+
+async function saveLibraryRow(table, row, token) {
+  const existing = await findLibraryRow(table, row.movie_id, row.movie_type, row.user_id, token)
+  if (existing?.id) {
+    const url = `${SUPABASE_URL}/rest/v1/${table}?id=eq.${encode(existing.id)}&select=*`
+    const data = await requestJson(url, token, {
+      method: 'PATCH',
+      body: JSON.stringify(row),
+    })
+    return Array.isArray(data) ? data[0] : data
+  }
+
+  const url = `${SUPABASE_URL}/rest/v1/${table}?select=*`
+  const data = await requestJson(url, token, {
+    method: 'POST',
+    body: JSON.stringify(row),
+  })
+  return Array.isArray(data) ? data[0] : data
+}
+
 export const watchlistService = {
   get: async (userId, token) => {
     if (!userId || !token) return []
@@ -23,30 +84,12 @@ export const watchlistService = {
 
   add: async (movie, userId, token) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/watchlist?select=*&on_conflict=user_id,movie_id,movie_type`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({
-        user_id: userId,
-        movie_id: movie.imdbID,
-        movie_type: movie.Type || 'movie',
-        title: movie.Title,
-        poster_url: movie.Poster && movie.Poster !== 'N/A' ? movie.Poster : 'N/A',
-        year: movie.Year,
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`watchlistService.add failed: ${response.status} - ${err}`)
-    }
-    const data = await response.json()
-    return data[0] || data
+    return saveLibraryRow('watchlist', normalizeMovieRow(movie, userId), token)
   },
 
   remove: async (movieId, userId, token) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/watchlist?user_id=eq.${encodeURIComponent(userId)}&movie_id=eq.${encodeURIComponent(movieId)}`
+    const url = `${SUPABASE_URL}/rest/v1/watchlist?user_id=eq.${encode(userId)}&movie_id=eq.${encode(movieId)}`
     const response = await fetch(url, {
       method: 'DELETE',
       headers: authHeaders(token),
@@ -71,30 +114,12 @@ export const likedMoviesService = {
 
   add: async (movie, userId, token) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/liked_movies?select=*&on_conflict=user_id,movie_id,movie_type`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({
-        user_id: userId,
-        movie_id: movie.imdbID,
-        movie_type: movie.Type || 'movie',
-        title: movie.Title,
-        poster_url: movie.Poster && movie.Poster !== 'N/A' ? movie.Poster : 'N/A',
-        year: movie.Year,
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`likedMoviesService.add failed: ${response.status} - ${err}`)
-    }
-    const data = await response.json()
-    return data[0] || data
+    return saveLibraryRow('liked_movies', normalizeMovieRow(movie, userId), token)
   },
 
   remove: async (movieId, userId, token) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/liked_movies?user_id=eq.${encodeURIComponent(userId)}&movie_id=eq.${encodeURIComponent(movieId)}`
+    const url = `${SUPABASE_URL}/rest/v1/liked_movies?user_id=eq.${encode(userId)}&movie_id=eq.${encode(movieId)}`
     const response = await fetch(url, {
       method: 'DELETE',
       headers: authHeaders(token),
@@ -120,50 +145,35 @@ export const watchHistoryService = {
 
   addOrUpdate: async (movie, userId, token, progress = 0, lastPosition = 0, genre = null) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/watch_history?select=*&user_id=eq.${encodeURIComponent(userId)}&movie_id=eq.${encodeURIComponent(movie.imdbID)}&movie_type=eq.${encodeURIComponent(movie.Type || 'movie')}`
-    
-    // Check if entry exists
-    const existingResponse = await fetch(url, { headers: authHeaders(token) })
-    let existingTime = 0
-    if (existingResponse.ok) {
-      const existing = await existingResponse.json()
-      if (existing.length > 0) {
-        existingTime = existing[0].last_position || 0
-      }
-    }
-    
-    // Accumulate time
+    const movieType = movie.type || movie.Type || 'movie'
+    const movieId = movie.id?.toString() || movie.imdbID?.toString()
+    const existing = await findLibraryRow('watch_history', movieId, movieType, userId, token)
+    const existingTime = existing?.last_position || 0
     const totalPosition = existingTime + lastPosition
-    const estimatedDuration = (movie.Type || 'movie') === 'tv' ? 2700 : 7200
-    const totalProgress = Math.min((totalPosition / estimatedDuration) * 100, 100)
-
-    const upsertUrl = `${SUPABASE_URL}/rest/v1/watch_history?select=*&on_conflict=user_id,movie_id,movie_type`
-    const response = await fetch(upsertUrl, {
-      method: 'POST',
-      headers: authHeaders(token),
-      body: JSON.stringify({
-        user_id: userId,
-        movie_id: movie.imdbID,
-        movie_type: movie.Type || 'movie',
-        title: movie.Title,
-        poster_url: movie.Poster !== 'N/A' ? movie.Poster : null,
-        genre: genre || movie.Genre || null,
-        progress: totalProgress,
-        last_position: totalPosition,
-        completed: totalProgress >= 95,
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`watchHistoryService.addOrUpdate failed: ${response.status} - ${err}`)
+    const estimatedDuration = movieType === 'tv' ? 2700 : 7200
+    const accumulatedProgress = (totalPosition / estimatedDuration) * 100
+    const totalProgress = Math.min(Math.max(progress, accumulatedProgress), 100)
+    const row = {
+      user_id: userId,
+      movie_id: movieId,
+      movie_type: movieType,
+      title: movie.title || movie.Title,
+      poster_url: movie.poster_url || (movie.poster_path
+        ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+        : (movie.Poster && movie.Poster !== 'N/A' ? movie.Poster : null)),
+      genre: genre || movie.genre || movie.Genre || null,
+      progress: totalProgress,
+      last_position: totalPosition,
+      completed: totalProgress >= 95,
+      watched_at: new Date().toISOString(),
     }
-    const data = await response.json()
-    return data[0] || data
+
+    return saveLibraryRow('watch_history', row, token)
   },
 
   remove: async (movieId, userId, token) => {
     if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/watch_history?user_id=eq.${encodeURIComponent(userId)}&movie_id=eq.${encodeURIComponent(movieId)}`
+    const url = `${SUPABASE_URL}/rest/v1/watch_history?user_id=eq.${encode(userId)}&movie_id=eq.${encode(movieId)}`
     const response = await fetch(url, {
       method: 'DELETE',
       headers: authHeaders(token),
@@ -172,5 +182,34 @@ export const watchHistoryService = {
       const err = await response.text()
       throw new Error(`watchHistoryService.remove failed: ${response.status} - ${err}`)
     }
+  },
+}
+
+export const notificationService = {
+  get: async (userId, token) => {
+    if (!userId || !token) return []
+    const url = `${SUPABASE_URL}/rest/v1/notifications?select=*&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc`
+    const response = await fetch(url, { headers: authHeaders(token) })
+    if (!response.ok) return []
+    return await response.json()
+  },
+
+  markRead: async (notificationId, userId, token) => {
+    if (!userId || !token) throw new Error('Not authenticated')
+    const url = `${SUPABASE_URL}/rest/v1/notifications?id=eq.${encode(notificationId)}`
+    await fetch(url, {
+      method: 'PATCH',
+      headers: authHeaders(token),
+      body: JSON.stringify({ is_read: true }),
+    })
+  },
+
+  delete: async (notificationId, userId, token) => {
+    if (!userId || !token) throw new Error('Not authenticated')
+    const url = `${SUPABASE_URL}/rest/v1/notifications?id=eq.${encode(notificationId)}`
+    await fetch(url, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    })
   },
 }

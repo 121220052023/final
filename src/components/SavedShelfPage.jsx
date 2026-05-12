@@ -59,6 +59,7 @@ export default function SavedShelfPage({
                       src={getBackdropUrl(heroItem)}
                       alt={getDisplayTitle(heroItem)}
                       className="h-full w-full object-cover"
+                      onError={(e) => { e.target.style.display = 'none'; }}
                     />
                     <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,18,20,0.08)_0%,rgba(17,18,20,0.18)_28%,rgba(17,18,20,0.68)_100%)]" />
                   </>
@@ -106,6 +107,7 @@ export default function SavedShelfPage({
                       src={getPosterUrl(item)}
                       alt={getDisplayTitle(item)}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={(e) => { e.target.src = 'https://via.placeholder.com/300x450?text=No+Poster'; }}
                     />
                   </div>
                 </button>

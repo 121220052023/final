@@ -3,18 +3,18 @@ import { useAuth } from '../context/AuthContext'
 import { watchHistoryService } from '../services/supabaseService'
 
 export const useWatchHistory = (movie) => {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const intervalRef = useRef(null)
   const [progress, setProgress] = useState(0)
   const [lastPosition, setLastPosition] = useState(0)
   const [isTracking, setIsTracking] = useState(false)
 
   useEffect(() => {
-    if (!user || !movie) return
+    if (!user || !session || !movie) return
 
     const loadHistory = async () => {
       try {
-        const history = await watchHistoryService.get(100)
+        const history = await watchHistoryService.get(user.id, session.access_token, 100)
         const movieHistory = history.find(h => h.movie_id === movie.imdbID)
         if (movieHistory) {
           setProgress(movieHistory.progress)
@@ -26,7 +26,7 @@ export const useWatchHistory = (movie) => {
     }
 
     loadHistory()
-  }, [user, movie])
+  }, [user, session, movie])
 
   const startTracking = () => {
     setIsTracking(true)
@@ -42,11 +42,18 @@ export const useWatchHistory = (movie) => {
       intervalRef.current = null
     }
 
-    if (movie && lastPosition > 0) {
+    if (movie && user && session && lastPosition > 0) {
       try {
         const estimatedDuration = 7200
         const progressPercent = Math.min((lastPosition / estimatedDuration) * 100, 100)
-        await watchHistoryService.addOrUpdate(movie, progressPercent, lastPosition)
+        await watchHistoryService.addOrUpdate(
+          movie,
+          user.id,
+          session.access_token,
+          progressPercent,
+          lastPosition,
+          movie.Genre
+        )
       } catch (error) {
         console.error('Error saving watch history:', error)
       }

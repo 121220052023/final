@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .vercel/
+.qodo/
 .env
 .env.*
 !.env.example
@@ -9,5 +10,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
-
-.vercel
+*.log
+dev-server.*.log
+eslint_output.txt
+test_asd.js
+create_tables.go
+setup-db.cjs
+IMPLEMENTATION_COMPLETE.md
+NEW_FEATURES.md
+UPDATE_SUMMARY.md
+DESIGN_IMPROVEMENTS.md
+DESIGN_RATING_AND_ADVICE.md

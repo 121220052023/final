@@ -1,15 +1,103 @@
 import axios from 'axios';
 import { tmdbApi } from './tmdb';
 
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GLM_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+
 const makeAIRequest = async (prompt) => {
-  const response = await axios.post(
-    '/api/ai',
-    {
-      model: 'google/gemma-3-27b-it',
-      prompt,
-    }
-  );
-  return response.data.content;
+  const provider = import.meta.env.VITE_AI_PROVIDER || 'gemini';
+
+  if (provider === 'gemini') {
+    return await makeGeminiRequest(prompt);
+  } else if (provider === 'glm') {
+    return await makeGLMRequest(prompt);
+  }
+  return await makeOpenRouterRequest(prompt);
+};
+
+const makeGeminiRequest = async (prompt) => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const model = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
+
+  if (!apiKey) {
+    throw new Error('Gemini API key not configured. Add VITE_GEMINI_API_KEY to your .env file.');
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const response = await axios.post(
+      url,
+      {
+        contents: [{ parts: [{ text: prompt }] }]
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+    const content = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content) throw new Error('Empty response from AI');
+    return content;
+  } catch (error) {
+    if (error.response?.status === 429) throw new Error('Gemini rate limit exceeded. Try again in a moment.');
+    if (error.code === 'ECONNABORTED') throw new Error('AI request timed out. Try again.');
+    throw new Error(error.response?.data?.error?.message || error.message || 'AI request failed');
+  }
+};
+
+const makeOpenRouterRequest = async (prompt) => {
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+  const model = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-3-27b-it';
+
+  if (!apiKey) {
+    throw new Error('OpenRouter API key not configured. Add VITE_OPENROUTER_API_KEY to your .env file.');
+  }
+
+  try {
+    const response = await axios.post(
+      OPENROUTER_URL,
+      { model, messages: [{ role: 'user', content: prompt }] },
+      { 
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`, 
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://oceanofmovies.com',
+          'X-Title': 'Ocean of Movies'
+        }, 
+        timeout: 30000 
+      }
+    );
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from AI');
+    return content;
+  } catch (error) {
+    if (error.response?.status === 401) throw new Error('Invalid OpenRouter API key');
+    if (error.response?.status === 429) throw new Error('AI rate limit exceeded. Try again in a moment.');
+    if (error.code === 'ECONNABORTED') throw new Error('AI request timed out. Try again.');
+    throw new Error(error.response?.data?.error?.message || error.message || 'AI request failed');
+  }
+};
+
+const makeGLMRequest = async (prompt) => {
+  const apiKey = import.meta.env.VITE_GLM_API_KEY;
+  const model = import.meta.env.VITE_GLM_MODEL || 'GLM-4.5-Flash';
+
+  if (!apiKey) {
+    throw new Error('GLM API key not configured. Add VITE_GLM_API_KEY to your .env file.');
+  }
+
+  try {
+    const response = await axios.post(
+      GLM_URL,
+      { model, messages: [{ role: 'user', content: prompt }] },
+      { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from AI');
+    return content;
+  } catch (error) {
+    if (error.response?.status === 401) throw new Error('Invalid GLM API key');
+    if (error.response?.status === 429) throw new Error('GLM rate limit exceeded. Try again in a moment.');
+    if (error.code === 'ECONNABORTED') throw new Error('AI request timed out. Try again.');
+    throw new Error(error.response?.data?.error?.message || error.message || 'AI request failed');
+  }
 };
 
 export const getAISummary = async (movie) => {
@@ -74,7 +162,6 @@ export const getPersonalizedRecommendations = async (preferences) => {
   return await makeAIRequest(prompt);
 };
 
-// Fetch actual movie data from TMDB based on AI suggestion
 const fetchMovieFromName = async (movieName) => {
   try {
     const result = await tmdbApi.searchMovies(movieName);
@@ -114,25 +201,26 @@ Use ONLY the "MOVIE: Title" format for movies. Be warm and enthusiastic. Keep it
 
   const aiResponse = await makeAIRequest(prompt);
 
-  // Extract movie names using regex
+  if (!aiResponse || typeof aiResponse !== 'string') {
+    return { text: 'Sorry, I could not generate a response right now.', movies: [] };
+  }
+
   const movieNames = [];
   const lines = aiResponse.split('\n');
   for (const line of lines) {
     const match = line.match(/MOVIE:\s*(.+)/i);
     if (match) {
-      const name = match[1].trim().replace(/[.*_~`]/g, ''); // Remove markdown formatting
+      const name = match[1].trim().replace(/[.*_~`]/g, '');
       if (name) movieNames.push(name);
     }
   }
 
-  // Fetch actual movie data from TMDB
   const movies = [];
   for (const name of movieNames.slice(0, 5)) {
     const movieData = await fetchMovieFromName(name);
     if (movieData) movies.push(movieData);
   }
 
-  // Clean the text response by removing MOVIE: lines
   const cleanText = aiResponse
     .replace(/MOVIE:\s*.+\n?/gi, '')
     .replace(/\n{2,}/g, '\n')

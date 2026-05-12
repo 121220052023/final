@@ -125,17 +125,17 @@
   --app-on-surface-variant: #a9a197;
 
   --app-primary: #ff5f3c;
-  --app-on-primary: #220e09;
+  --app-on-primary: #ffffff;
   --app-primary-container: #542114;
   --app-on-primary-container: #ffe8df;
 
   --app-secondary: #c89a54;
-  --app-on-secondary: #211507;
+  --app-on-secondary: #ffffff;
   --app-secondary-container: #473215;
   --app-on-secondary-container: #fff0d7;
 
   --app-tertiary: #64b7c8;
-  --app-on-tertiary: #071a1f;
+  --app-on-tertiary: #ffffff;
   --app-tertiary-container: #143640;
   --app-on-tertiary-container: #e7f8fb;
 
@@ -155,7 +155,11 @@
 
 @layer base {
   * {
-    @apply border-border outline-none;
+    @apply border-border;
+  }
+
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
   }
 
   html {
@@ -163,7 +167,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary selection:text-white;
+    @apply bg-background text-foreground antialiased;
     font-family: "Inter", sans-serif;
     min-height: 100vh;
     background-image:
@@ -174,19 +178,12 @@
     background-attachment: fixed;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  .display-font {
+  h1, h2, h3, h4, .display-font {
     font-family: "Space Grotesk", sans-serif;
     letter-spacing: -0.03em;
   }
 
-  button,
-  input,
-  textarea,
-  select {
+  button, input, textarea, select {
     font: inherit;
   }
 
@@ -300,8 +297,7 @@
     background: color-mix(in srgb, var(--app-card) 72%, transparent);
   }
 
-  .candy-chip:hover,
-  .candy-chip.active {
+  .candy-chip:hover, .candy-chip.active {
     color: var(--app-foreground);
     border-color: color-mix(in srgb, var(--app-primary) 34%, transparent);
     background: color-mix(in srgb, var(--app-primary) 12%, var(--app-card));
@@ -313,12 +309,28 @@
   }
 
   .text-input {
-    @apply w-full rounded-[1.1rem] border border-border bg-surface px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-200;
+    @apply w-full rounded-[1.1rem] border border-border bg-surface-container-high px-4 py-3.5 text-sm text-foreground transition-all duration-200;
+  }
+
+  .text-input::placeholder {
+    @apply text-muted-foreground;
+    opacity: 0.6;
   }
 
   .text-input:focus {
-    border-color: color-mix(in srgb, var(--app-primary) 36%, transparent);
-    box-shadow: 0 0 0 4px rgba(216, 69, 39, 0.08);
+    @apply border-primary;
+    outline: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary) 15%, transparent);
+  }
+
+  .text-input::selection {
+    background-color: var(--app-primary);
+    color: var(--app-on-primary);
+  }
+
+  .text-input::-moz-selection {
+    background-color: var(--app-primary);
+    color: var(--app-on-primary);
   }
 
   .auth-input {
@@ -369,13 +381,8 @@
 }
 
 @keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 ::-webkit-scrollbar {

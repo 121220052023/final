@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Lock, Mail, User } from 'lucide-react';
+import { Loader2, Lock, Mail, User, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Signup() {
@@ -8,8 +8,10 @@ export default function Signup() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -19,8 +21,12 @@ export default function Signup() {
     setError('');
 
     try {
-      await signUp({ email, password, username, fullName });
-      navigate('/');
+      const data = await signUp({ email, password, username, fullName });
+      if (data?.user && !data?.session) {
+        setSuccess(true);
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.message || 'Failed to create account');
     } finally {
@@ -42,84 +48,113 @@ export default function Signup() {
             </p>
           </div>
 
-          {error ? (
-            <div className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-400">
-              {error}
-            </div>
-          ) : null}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground">Username</label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  className="auth-input"
-                  placeholder="username"
-                  required
-                />
+          {success ? (
+            <div className="rounded-[1.2rem] border border-green-500/20 bg-green-500/8 p-6 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                <Mail className="h-6 w-6 text-green-500" />
               </div>
+              <h3 className="mt-4 text-lg font-bold text-foreground">Verify your email</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                We've sent a verification link to <span className="font-semibold text-foreground">{email}</span>. 
+                Please check your inbox to complete your registration.
+              </p>
+              <Link 
+                to="/login"
+                className="btn-primary mt-8 w-full justify-center"
+              >
+                Go to Sign in
+              </Link>
             </div>
+          ) : (
+            <>
+              {error ? (
+                <div className="mb-4 rounded-[1.2rem] border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-400">
+                  {error}
+                </div>
+              ) : null}
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground">Full name</label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  className="auth-input"
-                  placeholder="Your name"
-                />
-              </div>
-            </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground">Username</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      className="auth-input"
+                      placeholder="username"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="auth-input"
-                  placeholder="you@example.com"
-                  required
-                />
-              </div>
-            </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground">Full name</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                      className="auth-input"
+                      placeholder="Your name"
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-foreground">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="auth-input"
-                  placeholder="At least 6 characters"
-                  minLength={6}
-                  required
-                />
-              </div>
-            </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="auth-input"
+                      placeholder="you@example.com"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3.5">
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Create account'}
-            </button>
-          </form>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-foreground">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="auth-input pr-12"
+                      placeholder="At least 6 characters"
+                      minLength={6}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
 
-          <p className="mt-6 text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link to="/login" className="font-semibold text-primary">
-              Sign in
-            </Link>
-          </p>
+                <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3.5">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Create account'}
+                </button>
+              </form>
+
+              <p className="mt-6 text-sm text-muted-foreground">
+                Already have an account?{' '}
+                <Link to="/login" className="font-semibold text-primary">
+                  Sign in
+                </Link>
+              </p>
+            </>
+          )}
         </section>
 
         <section className="editorial-panel relative overflow-hidden rounded-[2rem] p-6 sm:p-8 lg:p-10">

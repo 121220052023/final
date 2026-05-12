@@ -4,7 +4,10 @@ import { Clock3, Heart, MinusCircle, PlusCircle, TrendingUp } from 'lucide-react
 import { tmdbApi } from '../services/tmdb';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
+import { useAuth } from '../context/AuthContext';
 import ContentFilter from '../components/ContentFilter';
+import Pagination from '../components/Pagination';
+import { toast } from 'sonner';
 
 const windows = [
   { id: 'day', label: 'Today' },
@@ -13,12 +16,11 @@ const windows = [
 
 function normalizeMovie(movie) {
   if (!movie || !movie.id) return null;
-  
   return {
     imdbID: movie.id.toString(),
     Title: movie.title,
     Year: movie.release_date?.split('-')[0] || 'N/A',
-    Poster: movie.poster_path ? `https://image.tmdb.org/t/p/w780${movie.poster_path}` : 'https://via.placeholder.com/700x1050?text=No+Image',
+    Poster: movie.poster_path ? `https://image.tmdb.org/t/p/w780${movie.poster_path}` : '',
     Plot: movie.overview || 'No plot available',
     rating: movie.vote_average,
   };
@@ -33,6 +35,7 @@ export default function Trending() {
   const navigate = useNavigate();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +45,7 @@ export default function Trending() {
       try {
         const data = await tmdbApi.getTrendingMovies(timeWindow, page);
         if (!cancelled) {
-          setTrendingMovies((data.results || []).map(normalizeMovie).filter(Boolean));
+          setTrendingMovies((data.results || []).slice(0, 21).map(normalizeMovie).filter(Boolean));
           setTotalPages(Math.min(data.total_pages || 1, 500));
         }
       } catch (error) {
@@ -54,9 +57,7 @@ export default function Trending() {
     };
 
     fetchTrending();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [timeWindow, page]);
 
   const normalizedMovies = trendingMovies.map(normalizeMovie);
@@ -67,85 +68,39 @@ export default function Trending() {
 
   const toggleWatchlist = (event, movie) => {
     event.stopPropagation();
+    if (!isAuthenticated) {
+      toast.error('Please sign in to manage your watchlist');
+      navigate('/login');
+      return;
+    }
     if (isInWatchlist(movie.imdbID)) {
       removeFromWatchlist(movie.imdbID);
+      toast.success('Removed from watchlist');
     } else {
       addToWatchlist(movie);
+      toast.success('Added to watchlist');
     }
   };
 
   const toggleLike = (event, movie) => {
     event.stopPropagation();
+    if (!isAuthenticated) {
+      toast.error('Please sign in to like movies');
+      navigate('/login');
+      return;
+    }
     if (isLiked(movie.imdbID)) {
       removeFromLikedMovies(movie.imdbID);
+      toast.success('Removed from liked');
     } else {
       addToLikedMovies(movie);
+      toast.success('Added to liked');
     }
   };
 
   const handleTimeWindowChange = (window) => {
     setTimeWindow(window);
     setPage(1);
-  };
-
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
-
-    return (
-      <div className="flex items-center justify-center gap-2 mt-12 py-8">
-        <button
-          onClick={() => {
-            setPage(p => Math.max(1, p - 1));
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          disabled={page === 1}
-          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
-        >
-          Previous
-        </button>
-
-        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-          let pageNum;
-          if (totalPages <= 5) {
-            pageNum = i + 1;
-          } else if (page <= 3) {
-            pageNum = i + 1;
-          } else if (page >= totalPages - 2) {
-            pageNum = totalPages - 4 + i;
-          } else {
-            pageNum = page - 2 + i;
-          }
-
-          return (
-            <button
-              key={pageNum}
-              onClick={() => {
-                setPage(pageNum);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
-                page === pageNum
-                  ? 'bg-primary text-white'
-                  : 'bg-muted text-white/70 hover:bg-accent hover:text-white'
-              }`}
-            >
-              {pageNum}
-            </button>
-          );
-        })}
-
-        <button
-          onClick={() => {
-            setPage(p => Math.min(totalPages, p + 1));
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          disabled={page === totalPages}
-          className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
-        >
-          Next
-        </button>
-      </div>
-    );
   };
 
   return (
@@ -168,7 +123,7 @@ export default function Trending() {
               Ranked with more hierarchy
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground md:text-base">
-              The top result leads the page, and everything after that cascades in a stronger order rather than a flat wall.
+              The top result leads the page, and everything after that cascades in a stronger order.
             </p>
           </div>
 
@@ -206,7 +161,7 @@ export default function Trending() {
                   className="movie-card group relative mb-10 overflow-hidden text-left"
                 >
                   <img
-                    src={featured.Poster}
+                    src={featured.Poster || 'https://via.placeholder.com/700x1050?text=No+Image'}
                     alt={featured.Title}
                     className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
@@ -255,7 +210,7 @@ export default function Trending() {
 
                     <div className="aspect-[0.77] overflow-hidden">
                       <img
-                        src={movie.Poster}
+                        src={movie.Poster || 'https://via.placeholder.com/700x1050?text=No+Image'}
                         alt={movie.Title}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
@@ -271,7 +226,7 @@ export default function Trending() {
                 ))}
               </div>
 
-              {renderPagination()}
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
           )}
         </div>

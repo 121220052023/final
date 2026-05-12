@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Clock3, Clapperboard, History, Play, Sparkles, Tv2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { watchHistoryService } from '../services/supabaseService';
+import { supabase } from '../lib/supabase';
 
 const formatTime = (totalSeconds) => {
   const hrs = Math.floor(totalSeconds / 3600);
@@ -21,47 +24,47 @@ const extractBaseId = (value) => value?.toString()?.replace(/-S\d+E\d+$/, '');
 export default function WatchHistory() {
   const { user, session } = useAuth();
   const navigate = useNavigate();
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all');
 
+  const { data: history = [], isLoading: loading } = useQuery({
+    queryKey: ['watchHistory', user?.id],
+    queryFn: async () => {
+      if (!user || !session) return [];
+      return await watchHistoryService.get(user.id, session.access_token, 100);
+    },
+    enabled: !!user && !!session,
+  });
+
   useEffect(() => {
-    if (!user || !session) return;
+    if (!user?.id || !session?.access_token) return;
 
-    let cancelled = false;
-
-    const loadHistory = async () => {
-      try {
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/watch_history?select=*&user_id=eq.${encodeURIComponent(user.id)}&order=watched_at.desc&limit=100`;
-        const response = await fetch(url, {
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok || cancelled) return;
-        const data = await response.json();
-        if (!cancelled) setHistory(data);
-      } catch (error) {
-        console.error('Error loading history:', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadHistory();
+    const channel = supabase
+      .channel(`watch_history:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'watch_history',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['watchHistory', user.id] });
+        }
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
+      supabase.removeChannel(channel);
     };
-  }, [user, session]);
+  }, [user?.id, queryClient]);
 
-  const clearAllHistory = async () => {
-    if (!user || !session) return;
-    try {
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/watch_history?user_id=eq.${encodeURIComponent(user.id)}`, {
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      if (!user || !session) return;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/watch_history?user_id=eq.${encodeURIComponent(user.id)}`;
+      await fetch(url, {
         method: 'DELETE',
         headers: {
           apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -69,9 +72,24 @@ export default function WatchHistory() {
           'Content-Type': 'application/json',
         },
       });
-      setHistory([]);
-    } catch (error) {
-      console.error('Error clearing history:', error);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['watchHistory', user?.id] });
+      const previousHistory = queryClient.getQueryData(['watchHistory', user?.id]);
+      queryClient.setQueryData(['watchHistory', user?.id], []);
+      return { previousHistory };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['watchHistory', user?.id], context.previousHistory);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchHistory', user?.id] });
+    },
+  });
+
+  const clearAllHistory = () => {
+    if (window.confirm('Are you sure you want to clear your entire watch history?')) {
+      clearMutation.mutate();
     }
   };
 
@@ -184,6 +202,7 @@ export default function WatchHistory() {
                   src={item.poster_url || 'https://via.placeholder.com/180x260?text=Poster'}
                   alt={item.title}
                   className="h-32 w-24 rounded-[1.15rem] object-cover"
+                  onError={(e) => { e.target.src = 'https://via.placeholder.com/180x260?text=No+Poster'; }}
                 />
 
                 <div className="min-w-0 flex-1">

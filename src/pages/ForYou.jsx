@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Clock3, Heart, Play, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
@@ -7,6 +8,7 @@ import { useWatchlist } from '../context/WatchlistContext';
 import { GENRE_MAP, getMoviesByGenre, getTrendingMovies } from '../services/imdbService';
 import { watchHistoryService } from '../services/supabaseService';
 import { tmdbApi } from '../services/tmdb';
+import { settingsService } from '../services/settingsService';
 import {
   deriveTopGenres,
   getBackdropUrl,
@@ -15,7 +17,6 @@ import {
   getMediaId,
   getPosterUrl,
   getPrimaryGenre,
-  getRatingValue,
   getTypeLabel,
   getYear,
   normalizeMediaItem,
@@ -28,6 +29,7 @@ const genreToId = Object.entries(GENRE_MAP).reduce((accumulator, [key, value]) =
 }, {});
 
 const extractBaseId = (value) => value?.toString()?.replace(/-S\d+E\d+$/, '');
+const ITEMS_PER_PAGE = 8;
 
 function ShelfPoster({ item, caption, onOpen, onWatch }) {
   return (
@@ -70,95 +72,79 @@ export default function ForYou() {
   const { likedMovies } = useLikedMovies();
   const { watchlist } = useWatchlist();
 
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [movieShelf, setMovieShelf] = useState([]);
-  const [seriesShelf, setSeriesShelf] = useState([]);
-  const [recommendationShelf, setRecommendationShelf] = useState([]);
-  const [moviePage, setMoviePage] = useState(1);
-  const [seriesPage, setSeriesPage] = useState(1);
-  const [recPage, setRecPage] = useState(1);
+  // 1. Fetch User Preferences
+  const { data: userPrefs = { genres: [], types: [] } } = useQuery({
+    queryKey: ['userSettings', user?.id],
+    queryFn: async () => {
+      const data = await settingsService.get();
+      if (!data) return { genres: [], types: [] };
+      return {
+        genres: data.preferred_genres ? JSON.parse(data.preferred_genres) : [],
+        types: data.preferred_types ? JSON.parse(data.preferred_types) : []
+      };
+    },
+    enabled: !!user,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
+  // 2. Fetch History
+  const { data: history = [] } = useQuery({
+    queryKey: ['watchHistory', user?.id, 36],
+    queryFn: () => watchHistoryService.get(user.id, session.access_token, 36),
+    enabled: !!user && !!session,
+  });
 
-    const loadPage = async () => {
-      setLoading(true);
-      try {
-        const historyData = user && session
-          ? await watchHistoryService.get(user.id, session.access_token, 36)
-          : [];
-
-        if (cancelled) return;
-        setHistory(historyData || []);
-
-        const tasteInput = [
-          ...(historyData || []),
-          ...likedMovies,
-          ...watchlist,
-        ];
-        const topGenres = deriveTopGenres(tasteInput, 2);
-
-        const mappedGenres = topGenres
-          .map((genre) => genreToId[genre.toLowerCase()] || genreToId[genre.toLowerCase().replace(/\s+/g, '-')])
-          .filter(Boolean);
-
-        const recentAnchor = historyData?.[0];
-        const anchorId = extractBaseId(recentAnchor?.movie_id);
-        const anchorType = recentAnchor?.movie_type === 'tv' ? 'tv' : 'movie';
-
-        const [movieData, tvData, recommendationData] = await Promise.all([
-          mappedGenres[0] ? getMoviesByGenre(mappedGenres[0], moviePage) : getTrendingMovies(moviePage),
-          tmdbApi.getTrendingTVShows('week', seriesPage),
-          anchorId
-            ? (anchorType === 'tv'
-                ? tmdbApi.getTVRecommendations(anchorId)
-                : tmdbApi.getMovieRecommendations(anchorId))
-            : tmdbApi.getTrendingMovies('week', recPage),
-        ]);
-
-        if (cancelled) return;
-
-        const normalizedMovies = (movieData.movies || []).map(normalizeMediaItem);
-        const normalizedSeries = (tvData.results || [])
-          .filter((item) => {
-            if (!mappedGenres.length) return true;
-            return item.genre_ids?.some((genreId) => mappedGenres.includes(genreId));
-          })
-          .slice(0, 8)
-          .map(normalizeMediaItem);
-
-        const normalizedRecommendations = (recommendationData.results || [])
-          .slice(0, 8)
-          .map(normalizeMediaItem);
-
-        setMovieShelf(uniqueById(normalizedMovies).slice(0, 8));
-        setSeriesShelf(uniqueById(normalizedSeries).slice(0, 8));
-        setRecommendationShelf(uniqueById(normalizedRecommendations).slice(0, 8));
-      } catch (error) {
-        console.error('Error loading For You page:', error);
-        if (!cancelled) {
-          setHistory([]);
-          setMovieShelf([]);
-          setSeriesShelf([]);
-          setRecommendationShelf([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadPage();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, session, likedMovies, watchlist, moviePage, seriesPage, recPage]);
-
+  // Derived Taste Logic
   const tasteProfile = useMemo(() => {
-    const topGenres = deriveTopGenres([...history, ...likedMovies, ...watchlist], 3);
-    return topGenres.length ? topGenres : ['Discovery', 'Character stories', 'Late-night picks'];
-  }, [history, likedMovies, watchlist]);
+    const tasteInput = [...history, ...likedMovies, ...watchlist];
+    const historyGenres = deriveTopGenres(tasteInput, 3);
+    const combined = [...new Set([...(userPrefs.genres || []), ...historyGenres])];
+    return combined.length ? combined.slice(0, 5) : ['Discovery', 'Character stories', 'Late-night picks'];
+  }, [history, likedMovies, watchlist, userPrefs]);
+
+  const mappedGenres = useMemo(() => {
+    return tasteProfile
+      .map((genre) => genreToId[genre.toLowerCase()] || genreToId[genre.toLowerCase().replace(/\s+/g, '-')])
+      .filter(Boolean);
+  }, [tasteProfile]);
+
+  const anchor = history?.[0];
+  const anchorId = extractBaseId(anchor?.movie_id);
+  const anchorType = anchor?.movie_type === 'tv' ? 'tv' : 'movie';
+
+  // 3. Shelf Queries
+  const { data: movieShelf = [], isLoading: isMovieLoading } = useQuery({
+    queryKey: ['movieShelf', mappedGenres[0], 1],
+    queryFn: async () => {
+      const wantsMovies = userPrefs.types.length === 0 || userPrefs.types.includes('movies');
+      if (!wantsMovies) return [];
+      const data = mappedGenres[0] ? await getMoviesByGenre(mappedGenres[0], 1) : await getTrendingMovies(1);
+      return uniqueById((data.movies || []).map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
+    },
+  });
+
+  const { data: seriesShelf = [], isLoading: isSeriesLoading } = useQuery({
+    queryKey: ['seriesShelf', mappedGenres, 1],
+    queryFn: async () => {
+      const wantsSeries = userPrefs.types.length === 0 || userPrefs.types.includes('tv') || userPrefs.types.includes('anime');
+      if (!wantsSeries) return [];
+      const data = await tmdbApi.getTrendingTVShows('week', 1);
+      return uniqueById((data.results || [])
+        .filter(item => !mappedGenres.length || item.genre_ids?.some(gid => mappedGenres.includes(gid)))
+        .map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
+    },
+  });
+
+  const { data: recommendationShelf = [], isLoading: isRecLoading } = useQuery({
+    queryKey: ['recommendationShelf', anchorId, anchorType],
+    queryFn: async () => {
+      const data = anchorId
+        ? (anchorType === 'tv' ? await tmdbApi.getTVRecommendations(anchorId) : await tmdbApi.getMovieRecommendations(anchorId))
+        : await tmdbApi.getTrendingMovies('week', 1);
+      return uniqueById((data.results || []).map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
+    },
+  });
+
+  const isLoading = isMovieLoading || isSeriesLoading || isRecLoading;
 
   const heroItem = recommendationShelf[0] || movieShelf[0] || seriesShelf[0] || likedMovies[0] || watchlist[0] || null;
 
@@ -176,6 +162,14 @@ export default function ForYou() {
 
   const continueWatching = history.slice(0, 4);
 
+  if (isLoading && !heroItem) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+    );
+  }
+
   return (
     <div className="pb-20 pt-28">
       <div className="page-shell-wide space-y-14">
@@ -190,7 +184,7 @@ export default function ForYou() {
                     Recommendations shaped by what you actually watch.
                   </h1>
                   <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground">
-                    This page reads your recent watch history first, then your likes and watchlist, and turns that into shelves of movies and series that match your real taste.
+                    This page reads your preferences, watch history, likes, and watchlist to build shelves of movies and series that match your real taste.
                   </p>
                 </div>
 
@@ -232,12 +226,12 @@ export default function ForYou() {
           </div>
 
           <div className="editorial-panel rounded-[2rem] p-6 sm:p-8">
-            <div className="section-label">Current taste map</div>
+            <div className="section-label">Your taste profile</div>
             <div className="mt-5 space-y-4">
               {[
                 { icon: Clock3, label: 'Continue watching', value: `${continueWatching.length} items active` },
-                { icon: Heart, label: 'Preference signal', value: tasteProfile.join(' • ') },
-                { icon: Sparkles, label: 'Anchor title', value: getDisplayTitle(heroItem, 'Building from your activity') },
+                { icon: Heart, label: 'Preferred genres', value: tasteProfile.slice(0, 3).join(' • ') || 'Set your preferences' },
+                { icon: Sparkles, label: 'Content types', value: userPrefs.types.length ? userPrefs.types.join(', ') : 'Movies & Series' },
               ].map((item) => (
                 <div key={item.label} className="rounded-[1.3rem] border border-border bg-muted/50 p-4">
                   <div className="flex items-start gap-3">
@@ -303,102 +297,51 @@ export default function ForYou() {
               <h2 className="section-heading mt-2">Closest matches to your recent viewing lane</h2>
             </div>
           </div>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {recommendationShelf.slice(0, 4).map((item) => (
               <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
             ))}
           </div>
         </section>
 
-        <section>
-          <div className="section-title mb-6">
-            <div>
-              <div className="section-label">Movies</div>
-              <h2 className="section-heading mt-2">Movie picks aligned with your top genres</h2>
+        {movieShelf.length > 0 && (
+          <section>
+            <div className="section-title mb-6">
+              <div>
+                <div className="section-label">Movies for you</div>
+                <h2 className="section-heading mt-2">Movie picks aligned with your preferred genres</h2>
+              </div>
             </div>
-          </div>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {movieShelf.slice(0, 8).map((item) => (
-              <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
-            ))}
-          </div>
-          <PaginationControls
-            currentPage={moviePage}
-            onPageChange={(p) => { setMoviePage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          />
-        </section>
+            <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              {movieShelf.map((item) => (
+                <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+              ))}
+            </div>
+          </section>
+        )}
 
-        <section>
-          <div className="section-title mb-6">
-            <div>
-              <div className="section-label">Series</div>
-              <h2 className="section-heading mt-2">Series worth opening next inside the same taste pocket</h2>
+        {seriesShelf.length > 0 && (
+          <section>
+            <div className="section-title mb-6">
+              <div>
+                <div className="section-label">Series for you</div>
+                <h2 className="section-heading mt-2">Series worth opening next inside the same taste pocket</h2>
+              </div>
             </div>
-          </div>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {seriesShelf.slice(0, 8).map((item) => (
-              <ShelfPoster
-                key={getMediaId(item)}
-                item={item}
-                caption={`${getGenreList(item).slice(0, 2).join(' • ') || getPrimaryGenre(item)} • ${getTypeLabel(item)}`}
-                onOpen={openMovie}
-                onWatch={watchMovie}
-              />
-            ))}
-          </div>
-          <PaginationControls
-            currentPage={seriesPage}
-            onPageChange={(p) => { setSeriesPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          />
-        </section>
+            <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              {seriesShelf.map((item) => (
+                <ShelfPoster
+                  key={getMediaId(item)}
+                  item={item}
+                  caption={`${getGenreList(item).slice(0, 2).join(' • ') || getPrimaryGenre(item)} • ${getTypeLabel(item)}`}
+                  onOpen={openMovie}
+                  onWatch={watchMovie}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
-    </div>
-  );
-}
-
-function PaginationControls({ currentPage, onPageChange }) {
-  const maxPage = 50;
-  const pages = [];
-  const startPage = Math.max(1, currentPage - 2);
-  const endPage = Math.min(maxPage, startPage + 4);
-
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(i);
-  }
-
-  return (
-    <div className="flex items-center justify-center gap-2 mt-8 py-6">
-      <button
-        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
-        className="flex items-center gap-1 px-3 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Previous
-      </button>
-
-      {pages.map((pageNum) => (
-        <button
-          key={pageNum}
-          onClick={() => onPageChange(pageNum)}
-          className={`min-w-[2.5rem] px-3 py-2 rounded-xl font-bold text-sm transition-all ${
-            currentPage === pageNum
-              ? 'bg-primary text-white'
-              : 'bg-muted text-white/70 hover:bg-accent hover:text-white'
-          }`}
-        >
-          {pageNum}
-        </button>
-      ))}
-
-      <button
-        onClick={() => onPageChange(Math.min(maxPage, currentPage + 1))}
-        disabled={currentPage === maxPage}
-        className="flex items-center gap-1 px-3 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
-      >
-        Next
-        <ChevronRight className="h-4 w-4" />
-      </button>
     </div>
   );
 }

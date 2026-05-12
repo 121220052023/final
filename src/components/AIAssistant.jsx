@@ -41,9 +41,10 @@ export default function AIAssistant() {
       ]);
     } catch (error) {
       console.error('Error getting AI response:', error);
+      const errorMsg = error?.response?.data?.error || error?.message || 'Unknown error';
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: 'I could not answer that right now. Try again in a moment.' },
+        { role: 'assistant', content: `Sorry, I could not answer that right now. (${errorMsg})` },
       ]);
     } finally {
       setIsLoading(false);

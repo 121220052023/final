@@ -121,8 +121,7 @@ const EmbedPlayer = ({ url, title }) => {
         scrolling="no"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
         allowFullScreen
-        referrerPolicy="no-referrer"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
+        referrerPolicy="no-referrer-when-downgrade"
         title={title}
         onLoad={() => {
           clearTimers();

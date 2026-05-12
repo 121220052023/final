@@ -1,10 +1,10 @@
 import axios from 'axios';
 
 // TMDB API Configuration
-const TMDB_API_KEY = '554e4ae2d84e5702e3c5df845cf33f51';
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
-const TMDB_BEARER_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NTRlNGFlMmQ4NGU1NzAyZTNjNWRmODQ1Y2YzM2Y1MSIsIm5iZiI6MTc2MDcyMTI4OC40NDk5OTk4LCJzdWIiOiI2OGYyNzk4OGE0ZmY3ZTExYjJlYzVhMjciLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.HskVsJiEuNmrE8uUosiM-0TSzmh_Ygvnxwo85-LK0zw';
+const TMDB_BEARER_TOKEN = import.meta.env.VITE_TMDB_BEARER_TOKEN;
 
 // Helper function to make API calls
 const makeRequest = async (endpoint, params = {}, page = 1) => {
@@ -37,6 +37,16 @@ const convertMovie = (movie) => {
   }
 
   return {
+    id: movie.id.toString(),
+    title: movie.title || movie.name,
+    year: movie.release_date ? movie.release_date.split('-')[0] : movie.first_air_date?.split('-')[0] || 'N/A',
+    poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
+    overview: movie.overview || 'No plot available',
+    genre: movie.genre_ids?.join(', ') || 'N/A',
+    type: type,
+    rating: movie.vote_average,
+    backdrop: movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : null,
+    // Legacy fields for backward compatibility
     imdbID: movie.id.toString(),
     Title: movie.title || movie.name,
     Year: movie.release_date ? movie.release_date.split('-')[0] : movie.first_air_date?.split('-')[0] || 'N/A',
@@ -44,8 +54,6 @@ const convertMovie = (movie) => {
     Plot: movie.overview || 'No plot available',
     Genre: movie.genre_ids?.join(', ') || 'N/A',
     Type: type,
-    rating: movie.vote_average,
-    backdrop: movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : null,
   };
 };
 
@@ -161,6 +169,39 @@ export const getMovieDetails = async (id, paramType = null) => {
     }
 
     return {
+      id: details.id.toString(),
+      title: details.title || details.name,
+      year: (details.release_date || details.first_air_date) ? (details.release_date || details.first_air_date).split('-')[0] : 'N/A',
+      rated: details.adult ? 'R' : 'PG-13',
+      released: details.release_date || details.first_air_date || 'N/A',
+      runtime: details.runtime ? `${details.runtime} min` : (details.episode_run_time?.[0] ? `${details.episode_run_time[0]} min` : 'N/A'),
+      genre: details.genres?.map(g => g.name).join(', ') || 'N/A',
+      director: credits.crew?.find(c => c.job === 'Director' || c.job === 'Executive Producer')?.name || 'N/A',
+      writer: credits.crew?.filter(c => c.job === 'Writer' || c.job === 'Screenplay' || c.job === 'Story').slice(0, 2).map(w => w.name).join(', ') || 'N/A',
+      actors: credits.cast?.slice(0, 5).map(a => a.name).join(', ') || 'N/A',
+      overview: details.overview || 'No plot available',
+      language: details.original_language?.toUpperCase() || null,
+      country: details.production_countries?.map(c => c.name).join(', ') || null,
+      awards: 'N/A',
+      poster_url: details.poster_path ? `${TMDB_IMAGE_BASE_URL}${details.poster_path}` : null,
+      ratings: [
+        {
+          Source: 'TMDB',
+          Value: `${details.vote_average?.toFixed(1) || '0.0'}/10`,
+        },
+      ],
+      metascore: details.vote_average ? Math.round(details.vote_average * 10).toString() : 'N/A',
+      imdbRating: details.vote_average?.toFixed(1) || '0.0',
+      imdbVotes: details.vote_count?.toLocaleString() || '0',
+      type: type,
+      dvd: 'N/A',
+      boxOffice: details.revenue ? `$${(details.revenue / 1000000).toFixed(1)}M` : 'N/A',
+      production: details.production_companies?.map(c => c.name).join(', ') || 'N/A',
+      website: details.homepage || 'N/A',
+      response: 'True',
+      backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/original${details.backdrop_path}` : null,
+      spoken_languages: details.spoken_languages?.map(l => l.english_name) || [],
+      // Legacy fields for backward compatibility
       imdbID: details.id.toString(),
       Title: details.title || details.name,
       Year: (details.release_date || details.first_air_date) ? (details.release_date || details.first_air_date).split('-')[0] : 'N/A',
@@ -183,16 +224,12 @@ export const getMovieDetails = async (id, paramType = null) => {
         },
       ],
       Metascore: details.vote_average ? Math.round(details.vote_average * 10).toString() : 'N/A',
-      imdbRating: details.vote_average?.toFixed(1) || '0.0',
-      imdbVotes: details.vote_count?.toLocaleString() || '0',
       Type: type,
       DVD: 'N/A',
       BoxOffice: details.revenue ? `$${(details.revenue / 1000000).toFixed(1)}M` : 'N/A',
       Production: details.production_companies?.map(c => c.name).join(', ') || 'N/A',
       Website: details.homepage || 'N/A',
       Response: 'True',
-      backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/original${details.backdrop_path}` : null,
-      spoken_languages: details.spoken_languages?.map(l => l.english_name) || []
     };
   } catch (error) {
     console.error('Error fetching details:', error);

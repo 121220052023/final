@@ -1,111 +1,228 @@
-import { createContext, useState, useEffect, useContext, useCallback } from 'react'
+import React, { createContext, useContext, useMemo, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 
-const ParentalControlContext = createContext({})
+const ParentalControlContext = createContext()
 
-export const useParentalControls = () => {
-  const context = useContext(ParentalControlContext)
-  if (!context) throw new Error('useParentalControls must be used within ParentalControlProvider')
-  return context
+export const useParentalControls = () => useContext(ParentalControlContext)
+
+const defaultParentalSettings = {
+  max_rating: 'PG-13',
+  blocked_genres: [],
+  blocked_keywords: [],
+  daily_watch_limit_minutes: 120,
+  bedtime_start: '21:00',
+  bedtime_end: '07:00',
+  block_adult_content: true,
+  require_approval: false,
 }
 
+const getTodayDate = () => new Date().toISOString().split('T')[0]
+
 export const ParentalControlProvider = ({ children }) => {
-  const { user, profile } = useAuth()
-  const [familyGroup, setFamilyGroup] = useState(null)
-  const [parentalSettings, setParentalSettings] = useState(null)
-  const [childProfile, setChildProfile] = useState(null)
-  const [familyMembers, setFamilyMembers] = useState([])
-  const [isParent, setIsParent] = useState(false)
-  const [isChild, setIsChild] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
 
-  const loadFamilyData = useCallback(async () => {
-    if (!user) {
-      setFamilyGroup(null)
-      setParentalSettings(null)
-      setChildProfile(null)
-      setFamilyMembers([])
-      setIsParent(false)
-      setIsChild(false)
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { data: memberData, error: memberError } = await supabase
+  // 1. Fetch Membership and Basic Info
+  const { data: membershipData, isLoading: isMembershipLoading } = useQuery({
+    queryKey: ['familyMembership', user?.id],
+    queryFn: async () => {
+      if (!user) return null
+      const { data, error } = await supabase
         .from('family_members')
-        .select('*, family_groups(*)')
+        .select('family_group_id, role')
         .eq('user_id', user.id)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!user,
+  })
 
-      // If table doesn't exist, gracefully handle it
-      if (memberError) {
-        console.log('Parental controls tables not set up yet:', memberError.message)
-        setFamilyGroup(null)
-        setParentalSettings(null)
-        setChildProfile(null)
-        setFamilyMembers([])
-        setIsParent(false)
-        setIsChild(false)
-        setLoading(false)
-        return
-      }
+  const familyGroupId = membershipData?.family_group_id
+  const userRole = membershipData?.role
 
-      if (memberData && memberData.length > 0) {
-        const member = memberData[0]
-        setFamilyGroup(member.family_groups)
-        setIsParent(member.role === 'parent')
-        setIsChild(member.role === 'child')
+  // 2. Fetch Family Group Details
+  const { data: familyGroup, isLoading: isGroupLoading } = useQuery({
+    queryKey: ['familyGroup', familyGroupId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('family_groups')
+        .select('*')
+        .eq('id', familyGroupId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!familyGroupId,
+  })
 
-        const { data: members } = await supabase
-          .from('family_members')
-          .select('*, profiles(username, full_name, avatar_url)')
-          .eq('group_id', member.group_id)
-        setFamilyMembers(members || [])
+  // 3. Fetch Family Members (enriched with profiles)
+  const { data: familyMembers = [], isLoading: isMembersLoading } = useQuery({
+    queryKey: ['familyMembers', familyGroupId],
+    queryFn: async () => {
+      const { data: members, error: membersError } = await supabase
+        .from('family_members')
+        .select('*')
+        .eq('family_group_id', familyGroupId)
+      if (membersError) throw membersError
 
-        if (member.role === 'parent') {
-          const { data: settings } = await supabase
-            .from('parental_settings')
-            .select('*')
-            .eq('group_id', member.group_id)
-            .single()
-          setParentalSettings(settings)
-        }
+      const memberIds = members.map(m => m.user_id)
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', memberIds)
+      if (profilesError) throw profilesError
 
-        if (member.role === 'child') {
-          const { data: cp } = await supabase
+      const profilesById = profiles.reduce((acc, p) => ({ ...acc, [p.id]: p }), {})
+      return members.map(m => ({
+        ...m,
+        profiles: profilesById[m.user_id] || null
+      }))
+    },
+    enabled: !!familyGroupId,
+  })
+
+  // 4. Fetch Parental Settings
+  const { data: parentalSettings, isLoading: isSettingsLoading } = useQuery({
+    queryKey: ['parentalSettings', familyGroupId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('parental_settings')
+        .select('*')
+        .eq('family_group_id', familyGroupId)
+        .maybeSingle()
+      if (error) throw error
+      return data || defaultParentalSettings
+    },
+    enabled: !!familyGroupId,
+  })
+
+  // 5. Fetch Child Profile (if current user is child or we want to manage it)
+  const { data: childProfile, isLoading: isChildProfileLoading } = useQuery({
+    queryKey: ['childProfile', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('child_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      
+      if (error) throw error
+
+      if (data) {
+        const today = getTodayDate()
+        if (data.last_active_date !== today) {
+          // Auto-reset time_used_today if it's a new day
+          const { data: resetData, error: resetError } = await supabase
             .from('child_profiles')
-            .select('*')
-            .eq('child_user_id', user.id)
-            .eq('group_id', member.group_id)
+            .update({ time_used_today: 0, last_active_date: today })
+            .eq('user_id', user.id)
+            .select()
             .single()
-          setChildProfile(cp)
-
-          const { data: settings } = await supabase
-            .from('parental_settings')
-            .select('*')
-            .eq('group_id', member.group_id)
-            .single()
-          setParentalSettings(settings)
+          if (resetError) throw resetError
+          return resetData
         }
-      } else {
-        setFamilyGroup(null)
-        setParentalSettings(null)
-        setChildProfile(null)
-        setFamilyMembers([])
-        setIsParent(false)
-        setIsChild(false)
+        return data
+      } else if (userRole === 'child') {
+        // Create initial child profile if missing
+        const { data: newData, error: newError } = await supabase
+          .from('child_profiles')
+          .insert({ user_id: user.id, last_active_date: getTodayDate() })
+          .select()
+          .single()
+        if (newError) throw newError
+        return newData
       }
-    } catch (error) {
-      console.error('Error loading family data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
+      return null
+    },
+    enabled: !!user && (userRole === 'child' || !!familyGroupId),
+  })
 
-  useEffect(() => {
-    loadFamilyData()
-  }, [loadFamilyData])
+  // Mutations
+  const createGroupMutation = useMutation({
+    mutationFn: async (name) => {
+      const { data: group, error: groupError } = await supabase
+        .from('family_groups')
+        .insert({ name, created_by: user.id })
+        .select().single()
+      if (groupError) throw groupError
+
+      await supabase.from('family_members').insert({
+        family_group_id: group.id,
+        user_id: user.id,
+        role: 'parent'
+      })
+
+      await supabase.from('profiles').update({ role: 'parent' }).eq('id', user.id)
+      await supabase.from('parental_settings').insert({
+        family_group_id: group.id,
+        ...defaultParentalSettings
+      })
+      return group
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['familyMembership'] })
+    }
+  })
+
+  const addChildMutation = useMutation({
+    mutationFn: async ({ username, role = 'child' }) => {
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', username)
+        .limit(1)
+
+      if (!users?.length) throw new Error('User not found')
+
+      const { error } = await supabase
+        .from('family_members')
+        .insert({ family_group_id: familyGroupId, user_id: users[0].id, role })
+      if (error) throw error
+
+      if (role === 'child') {
+        await supabase.from('profiles').update({ role: 'user' }).eq('id', users[0].id)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['familyMembers'] })
+    }
+  })
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (settings) => {
+      const { data, error } = await supabase
+        .from('parental_settings')
+        .upsert({ family_group_id: familyGroupId, ...settings })
+        .select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parentalSettings'] })
+    }
+  })
+
+  const updateChildProfileMutation = useMutation({
+    mutationFn: async ({ childUserId, updates }) => {
+      const { data, error } = await supabase
+        .from('child_profiles')
+        .upsert({ user_id: childUserId, ...updates, updated_at: new Date().toISOString() })
+        .select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['childProfile', variables.childUserId] })
+    }
+  })
+
+  // Helper Logic
+  const isParent = userRole === 'parent'
+  const isChild = userRole === 'child'
+  const isLoading = isMembershipLoading || isGroupLoading || isMembersLoading || isSettingsLoading || isChildProfileLoading
 
   const isContentAllowed = useCallback((movie) => {
     if (!isChild || !parentalSettings) return true
@@ -167,109 +284,33 @@ export const ParentalControlProvider = ({ children }) => {
 
   const requiresApproval = useCallback(() => {
     if (!isChild || !parentalSettings) return false
-    return parentalSettings.require_approval
+    return Boolean(parentalSettings.require_approval)
   }, [isChild, parentalSettings])
 
-  const createFamilyGroup = async (name) => {
-    if (!user) throw new Error('Not authenticated')
-    const { data: group, error: groupError } = await supabase
-      .from('family_groups')
-      .insert({ name, created_by: user.id })
-      .select()
-      .single()
-    if (groupError) throw groupError
-
-    await supabase
-      .from('family_members')
-      .insert({ group_id: group.id, user_id: user.id, role: 'parent' })
-
-    await supabase
-      .from('parental_settings')
-      .insert({ group_id: group.id })
-
-    await supabase
-      .from('profiles')
-      .update({ role: 'parent' })
-      .eq('id', user.id)
-
-    await loadFamilyData()
-    return group
-  }
-
-  const addChildToGroup = async (childEmail, role = 'child') => {
-    if (!familyGroup) throw new Error('No family group')
-    const { data: users } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('username', childEmail)
-      .limit(1)
-
-    if (!users || users.length === 0) throw new Error('User not found')
-
-    const { error } = await supabase
-      .from('family_members')
-      .insert({ group_id: familyGroup.id, user_id: users[0].id, role })
-    if (error) throw error
-
-    if (role === 'child') {
-      await supabase
-        .from('child_profiles')
-        .insert({ group_id: familyGroup.id, child_user_id: users[0].id })
-    }
-
-    await loadFamilyData()
-  }
-
-  const updateParentalSettings = async (settings) => {
-    if (!familyGroup) throw new Error('No family group')
-    const { data, error } = await supabase
-      .from('parental_settings')
-      .upsert({ group_id: familyGroup.id, ...settings })
-      .select()
-      .single()
-    if (error) throw error
-    setParentalSettings(data)
-    return data
-  }
-
-  const updateChildProfile = async (childUserId, updates) => {
-    if (!familyGroup) throw new Error('No family group')
-    const { data, error } = await supabase
-      .from('child_profiles')
-      .upsert({ group_id: familyGroup.id, child_user_id: childUserId, ...updates })
-      .select()
-      .single()
-    if (error) throw error
-    if (childUserId === user?.id) setChildProfile(data)
-    return data
-  }
-
-  const logActivity = async (action, details = {}) => {
-    if (!user || !familyGroup) return
-    await supabase
-      .from('activity_logs')
-      .insert({ user_id: user.id, group_id: familyGroup.id, action, details })
-  }
-
-  const value = {
+  const value = useMemo(() => ({
     familyGroup,
     parentalSettings,
     childProfile,
     familyMembers,
     isParent,
     isChild,
-    loading,
+    loading: isLoading,
     isContentAllowed,
     isBedtime,
     hasWatchTimeRemaining,
     requiresApproval,
-    createFamilyGroup,
-    addChildToGroup,
-    updateParentalSettings,
-    updateChildProfile,
-    logActivity,
-    refreshFamilyData: loadFamilyData,
-  }
+    createFamilyGroup: (name) => createGroupMutation.mutateAsync(name),
+    addChildToGroup: (username, role) => addChildMutation.mutateAsync({ username, role }),
+    updateParentalSettings: (settings) => updateSettingsMutation.mutateAsync(settings),
+    updateChildProfile: (childUserId, updates) => updateChildProfileMutation.mutateAsync({ childUserId, updates }),
+    refreshFamilyData: () => queryClient.invalidateQueries({ queryKey: ['familyMembership'] }),
+  }), [
+    familyGroup, parentalSettings, childProfile, familyMembers, 
+    isParent, isChild, isLoading, isContentAllowed, 
+    isBedtime, hasWatchTimeRemaining, requiresApproval,
+    createGroupMutation, addChildMutation, updateSettingsMutation, updateChildProfileMutation,
+    queryClient
+  ])
 
   return <ParentalControlContext.Provider value={value}>{children}</ParentalControlContext.Provider>
 }

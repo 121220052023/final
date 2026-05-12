@@ -12,6 +12,8 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 import { getMovieDetails } from '../services/imdbService';
 import { getAISummary } from '../services/aiService';
 import { tmdbApi } from '../services/tmdb';
@@ -21,7 +23,6 @@ import ParentalGate from '../components/ParentalGate';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useAuth } from '../context/AuthContext';
-import { usePlaybackSettings } from '../hooks/useSettings';
 import {
   getBackdropUrl,
   getDisplayCopy,
@@ -70,13 +71,13 @@ export default function MovieDetails() {
   const { user, isAuthenticated } = useAuth();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
-  const playbackSettings = usePlaybackSettings();
 
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [trailer, setTrailer] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
   const [cast, setCast] = useState([]);
+  const [showAISummary, setShowAISummary] = useState(false);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [aiSummary, setAiSummary] = useState('');
   const [loadingAI, setLoadingAI] = useState(false);
@@ -87,6 +88,7 @@ export default function MovieDetails() {
   const [reviewTitle, setReviewTitle] = useState('');
   const [reviewContent, setReviewContent] = useState('');
   const [reviewRating, setReviewRating] = useState(7);
+  const [likedReviewIds, setLikedReviewIds] = useState(new Set());
 
   const isInWatchlist = watchlist.some((item) => item.imdbID === id);
   const isLiked = likedMovies.some((item) => item.imdbID === id);
@@ -169,6 +171,20 @@ export default function MovieDetails() {
           setReviewContent(userReviewData.content || '');
           setReviewRating(userReviewData.rating || 7);
         }
+
+        if (isAuthenticated) {
+          const reviewIds = (reviewsData.reviews || []).map(r => r.id);
+          if (reviewIds.length > 0) {
+            const { data: likes } = await supabase
+              .from('review_likes')
+              .select('review_id')
+              .in('review_id', reviewIds)
+              .eq('user_id', user.id);
+            if (!cancelled && likes) {
+              setLikedReviewIds(new Set(likes.map(l => l.review_id)));
+            }
+          }
+        }
       } catch (error) {
         console.error('Error loading reviews:', error);
         if (!cancelled) {
@@ -206,20 +222,36 @@ export default function MovieDetails() {
 
   const handleAISummary = async () => {
     if (!movie) return;
+    if (!isAuthenticated) {
+      toast.error('Please sign in to use AI features');
+      navigate('/login');
+      return;
+    }
     setLoadingAI(true);
     try {
       const summary = await getAISummary(movie);
+      console.log('AI Summary received:', summary);
       setAiSummary(summary);
+      toast.success('AI summary generated');
     } catch (error) {
       console.error('Error generating AI summary:', error);
       setAiSummary('AI summary could not be generated right now.');
+      toast.error('Failed to generate AI summary');
     } finally {
       setLoadingAI(false);
     }
   };
 
   const handleSubmitReview = async () => {
-    if (!reviewTitle.trim() || !reviewContent.trim()) return;
+    if (!reviewTitle.trim() || !reviewContent.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    if (!isAuthenticated) {
+      toast.error('Please sign in to write a review');
+      navigate('/login');
+      return;
+    }
 
     setSubmittingReview(true);
     try {
@@ -230,8 +262,10 @@ export default function MovieDetails() {
           content: reviewContent,
           rating: reviewRating,
         });
+        toast.success('Review updated');
       } else {
         await reviewService.createReview(id, movieType, reviewTitle, reviewRating, reviewContent);
+        toast.success('Review posted');
       }
 
       const updatedReviews = await reviewService.getMovieReviews(id, movieType, 1, 20);
@@ -241,8 +275,74 @@ export default function MovieDetails() {
       setShowReviewForm(false);
     } catch (error) {
       console.error('Error saving review:', error);
+      toast.error('Failed to save review: ' + (error.message || 'Unknown error'));
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleLikeReview = async (reviewId) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to like reviews');
+      navigate('/login');
+      return;
+    }
+    const alreadyLiked = likedReviewIds.has(reviewId);
+    try {
+      if (alreadyLiked) {
+        await reviewService.unlikeReview(reviewId);
+        setLikedReviewIds(prev => { const next = new Set(prev); next.delete(reviewId); return next; });
+        setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, likes: Math.max((r.likes || 0) - 1, 0) } : r));
+      } else {
+        await reviewService.likeReview(reviewId);
+        setLikedReviewIds(prev => new Set(prev).add(reviewId));
+        setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, likes: (r.likes || 0) + 1 } : r));
+      }
+    } catch (error) {
+      console.error('Error toggling review like:', error);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Delete this review?')) return;
+    try {
+      await reviewService.deleteReview(reviewId);
+      setReviews(prev => prev.filter(r => r.id !== reviewId));
+      setUserReview(null);
+      toast.success('Review deleted');
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      toast.error('Failed to delete review');
+    }
+  };
+
+  const handleToggleWatchlist = () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to manage your watchlist');
+      navigate('/login');
+      return;
+    }
+    if (isInWatchlist) {
+      removeFromWatchlist(id);
+      toast.success('Removed from watchlist');
+    } else {
+      addToWatchlist(movie);
+      toast.success('Added to watchlist');
+    }
+  };
+
+  const handleToggleLike = () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to like movies');
+      navigate('/login');
+      return;
+    }
+    if (isLiked) {
+      removeFromLikedMovies(id);
+      toast.success('Removed from liked');
+    } else {
+      addToLikedMovies(movie);
+      toast.success('Added to liked');
     }
   };
 
@@ -306,6 +406,7 @@ export default function MovieDetails() {
             src={getBackdropUrl(movie)}
             alt={getDisplayTitle(movie)}
             className="absolute inset-0 h-full w-full object-cover"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,13,0.35)_0%,rgba(9,11,13,0.75)_58%,rgba(9,11,13,0.96)_100%)] dark:bg-[linear-gradient(180deg,rgba(9,11,13,0.4)_0%,rgba(9,11,13,0.8)_58%,rgba(9,11,13,1)_100%)]" />
 
@@ -316,6 +417,7 @@ export default function MovieDetails() {
                   src={getPosterUrl(movie)}
                   alt={getDisplayTitle(movie)}
                   className="aspect-[0.72] w-full object-cover"
+                  onError={(e) => { e.target.src = 'https://via.placeholder.com/300x450?text=No+Poster'; }}
                 />
               </div>
 
@@ -348,14 +450,14 @@ export default function MovieDetails() {
                     </button>
                   ) : null}
                   <button
-                    onClick={() => (isInWatchlist ? removeFromWatchlist(id) : addToWatchlist(movie))}
+                    onClick={handleToggleWatchlist}
                     className={`${isInWatchlist ? 'btn-soul' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
                   >
                     <Plus className="h-4 w-4" />
                     {isInWatchlist ? 'Saved for later' : 'Watch later'}
                   </button>
                   <button
-                    onClick={() => (isLiked ? removeFromLikedMovies(id) : addToLikedMovies(movie))}
+                    onClick={handleToggleLike}
                     className={`${isLiked ? 'btn-primary' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
                   >
                     <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
@@ -419,9 +521,14 @@ export default function MovieDetails() {
             <div className="editorial-panel rounded-[1.8rem] p-6 sm:p-8">
               <div className="section-label">AI summary</div>
               <h2 className="section-heading mt-2">A faster read on the title</h2>
-              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+              <p className="mt-4 text-sm leading-7 text-foreground">
                 {aiSummary || 'Generate a summary to get a compact take on the film, themes, and what makes it worth watching.'}
               </p>
+              {aiSummary && (
+                <button onClick={() => setShowAISummary(true)} className="btn-primary mt-4">
+                  View Summary
+                </button>
+              )}
             </div>
 
             <div className="editorial-panel rounded-[1.8rem] p-6 sm:p-8">
@@ -470,62 +577,46 @@ export default function MovieDetails() {
               </div>
             </div>
 
-            {isAuthenticated ? (
+            {isAuthenticated && !userReview && !showReviewForm && (
               <div className="mb-6">
-                <button onClick={() => setShowReviewForm((state) => !state)} className="btn-secondary">
+                <button onClick={() => { setReviewTitle(''); setReviewContent(''); setReviewRating(7); setShowReviewForm(true); }} className="btn-secondary">
                   <MessageSquare className="h-4 w-4" />
-                  {userReview ? 'Edit your review' : 'Write a review'}
+                  Write a review
                 </button>
               </div>
-            ) : null}
+            )}
 
-            {showReviewForm ? (
+            {showReviewForm && (
               <div className="mb-8 rounded-[1.4rem] border border-border bg-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-foreground">{userReview ? 'Edit your review' : 'Write a review'}</h3>
+                  <button onClick={() => setShowReviewForm(false)} className="btn-ghost text-muted-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
                     <label className="mb-2 block text-sm font-semibold text-foreground">Title</label>
-                    <input
-                      value={reviewTitle}
-                      onChange={(event) => setReviewTitle(event.target.value)}
-                      className="text-input"
-                      placeholder="Give your review a title"
-                    />
+                    <input value={reviewTitle} onChange={(e) => setReviewTitle(e.target.value)} className="text-input" placeholder="Give your review a title" />
                   </div>
-
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-foreground">Rating</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={reviewRating}
-                      onChange={(event) => setReviewRating(parseInt(event.target.value, 10))}
-                      className="w-full accent-primary"
-                    />
+                    <input type="range" min="1" max="10" value={reviewRating} onChange={(e) => setReviewRating(parseInt(e.target.value, 10))} className="w-full accent-primary" />
                     <div className="mt-2 text-sm font-semibold text-muted-foreground">{reviewRating}/10</div>
                   </div>
-
                   <div className="md:col-span-2">
                     <label className="mb-2 block text-sm font-semibold text-foreground">Review</label>
-                    <textarea
-                      value={reviewContent}
-                      onChange={(event) => setReviewContent(event.target.value)}
-                      className="text-input min-h-32 resize-none"
-                      placeholder="Share what worked and what did not."
-                    />
+                    <textarea value={reviewContent} onChange={(e) => setReviewContent(e.target.value)} className="text-input min-h-32 resize-none" placeholder="Share what worked and what did not." />
                   </div>
                 </div>
-
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button onClick={handleSubmitReview} disabled={submittingReview} className="btn-primary px-6 py-3">
-                    {submittingReview ? 'Saving...' : 'Save review'}
+                    {submittingReview ? 'Saving...' : userReview ? 'Update review' : 'Post review'}
                   </button>
-                  <button onClick={() => setShowReviewForm(false)} className="btn-secondary px-6 py-3">
-                    Cancel
-                  </button>
+                  <button onClick={() => setShowReviewForm(false)} className="btn-secondary px-6 py-3">Cancel</button>
                 </div>
               </div>
-            ) : null}
+            )}
 
             {reviews.length === 0 ? (
               <div className="rounded-[1.3rem] border border-border bg-muted/40 p-8 text-center">
@@ -534,36 +625,86 @@ export default function MovieDetails() {
               </div>
             ) : (
               <div className="space-y-4">
-                {reviews.map((review) => (
-                  <article key={review.id} className="rounded-[1.3rem] border border-border bg-card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          {(review.profiles?.username || review.user_name || 'U')[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-foreground">{review.profiles?.username || review.user_name || 'Anonymous'}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {new Date(review.created_at).toLocaleDateString()}
+                {reviews.map((review) => {
+                  const isOwn = user && review.user_id === user.id;
+                  return (
+                    <article key={review.id} className={`rounded-[1.3rem] border p-5 ${isOwn ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                            {(review.profiles?.username || review.profiles?.full_name || 'U')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-foreground">{review.profiles?.username || review.profiles?.full_name || 'Anonymous'}</div>
+                            <div className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">{review.rating}/10</div>
+                          {isOwn && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">You</span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">
-                        {review.rating}/10
-                      </div>
-                    </div>
+                      {review.title && <h3 className="display-font mt-3 text-lg font-bold text-foreground">{review.title}</h3>}
+                      <p className="mt-2 text-sm leading-7 text-muted-foreground">{review.content}</p>
 
-                    {review.title ? (
-                      <h3 className="display-font mt-4 text-xl font-bold text-foreground">{review.title}</h3>
-                    ) : null}
-                    <p className="mt-3 text-sm leading-7 text-muted-foreground">{review.content}</p>
-                  </article>
-                ))}
+                        <div className="mt-4 flex items-center gap-3">
+                        <button
+                          onClick={() => handleLikeReview(review.id)}
+                          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                            likedReviewIds.has(review.id) ? 'bg-red-500/10 text-red-400' : 'bg-muted text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <Heart className={`h-3.5 w-3.5 ${likedReviewIds.has(review.id) ? 'fill-red-400' : ''}`} />
+                          {review.likes || 0}
+                        </button>
+                        {isOwn && !showReviewForm && (
+                          <>
+                            <button
+                              onClick={() => { setReviewTitle(review.title || ''); setReviewContent(review.content || ''); setReviewRating(review.rating || 7); setShowReviewForm(true); }}
+                              className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReview(review.id)}
+                              className="flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-all"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
         </div>
+
+        {showAISummary && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAISummary(false)}>
+            <div className="editorial-panel max-w-2xl w-full rounded-[1.8rem] p-8 relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setShowAISummary(false)}
+                className="absolute top-4 right-4 rounded-full p-2 hover:bg-muted transition-colors"
+              >
+                <X className="h-5 w-5 text-muted-foreground" />
+              </button>
+              <div className="section-label">AI summary</div>
+              <h2 className="section-heading mt-2">{getDisplayTitle(movie)}</h2>
+              <p className="mt-5 text-base leading-8 text-foreground">
+                {aiSummary}
+              </p>
+              <button onClick={() => setShowAISummary(false)} className="btn-secondary mt-6 w-full justify-center">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </ContentFilter>
   );

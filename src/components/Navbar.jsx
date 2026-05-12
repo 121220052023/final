@@ -1,10 +1,11 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Menu, Moon, Search, Shield, Sparkles, Sun, User, X, ChevronDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { useAuth } from '../context/AuthContext';
 import { useParentalControls } from '../context/ParentalControlContext';
+import { notificationService } from '../services/supabaseService';
 
 const primaryLinks = [
   { label: 'Home', to: '/' },
@@ -35,16 +36,39 @@ export default function Navbar() {
   const [query, setQuery] = useState('');
   const [showUtilityMenu, setShowUtilityMenu] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, session, signOut } = useAuth();
   const { isParent } = useParentalControls();
   const navigate = useNavigate();
 
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  // Fetch notifications
+  useEffect(() => {
+    if (user && session) {
+      notificationService.get(user.id, session.access_token)
+        .then(data => setNotifications(data || []))
+        .catch(console.error);
+    }
+  }, [user, session]);
+
+  const handleMarkRead = async (id) => {
+    try {
+      await notificationService.markRead(id, user.id, session.access_token);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch (error) {
+      console.error('Failed to mark notification read:', error);
+    }
+  };
+
   const username = useMemo(() => {
-    if (profile?.username) return profile.username;
+    if (!profile) return null;
     if (profile?.full_name) return profile.full_name;
+    if (profile?.username) return profile.username;
     if (user?.email) return user.email.split('@')[0];
     return 'Guest';
-  }, [profile?.username, profile?.full_name, user?.email]);
+  }, [profile?.full_name, profile?.username, user?.email]);
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -59,6 +83,7 @@ export default function Navbar() {
     await signOut();
     setIsOpen(false);
     setShowUtilityMenu(false);
+    setShowNotifications(false);
   };
 
   return (
@@ -182,6 +207,72 @@ export default function Navbar() {
                     </Link>
                   )}
 
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowNotifications(!showNotifications)}
+                      className="btn-secondary h-10 w-10 p-0 rounded-xl relative"
+                      title="Notifications"
+                    >
+                      <Bell className="h-4 w-4" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white ring-2 ring-background animate-in zoom-in">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <AnimatePresence>
+                      {showNotifications && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setShowNotifications(false)} 
+                          />
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-card border border-border p-2 shadow-2xl z-50 overflow-hidden"
+                          >
+                            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                              <span className="text-sm font-bold">Notifications</span>
+                              {unreadCount > 0 && (
+                                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                                  {unreadCount} New
+                                </span>
+                              )}
+                            </div>
+                            <div className="max-h-[350px] overflow-y-auto py-1 scrollbar-thin">
+                              {notifications.length > 0 ? (
+                                notifications.map((n) => (
+                                  <div
+                                    key={n.id}
+                                    onClick={() => handleMarkRead(n.id)}
+                                    className={`px-4 py-3 hover:bg-muted transition-colors cursor-pointer relative group ${!n.is_read ? 'bg-primary/5' : ''}`}
+                                  >
+                                    {!n.is_read && (
+                                      <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-primary" />
+                                    )}
+                                    <div className="text-sm font-bold text-foreground mb-0.5">{n.title}</div>
+                                    <div className="text-xs text-muted-foreground line-clamp-2">{n.message}</div>
+                                    <div className="text-[10px] text-muted-foreground/60 mt-1.5">
+                                      {new Date(n.created_at).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="px-4 py-10 text-center">
+                                  <Bell className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+                                  <div className="text-sm text-muted-foreground font-medium">No notifications yet</div>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   <Link 
                     to="/profile" 
                     className="flex items-center gap-3 h-10 pl-3 pr-4 rounded-xl border border-border bg-card hover:border-primary transition-all group"
@@ -220,13 +311,32 @@ export default function Navbar() {
               )}
             </div>
 
-            <button
-              onClick={() => setIsOpen((open) => !open)}
-              className="btn-secondary px-2.5 py-1.5 xl:hidden"
-              aria-label="Open navigation"
-            >
-              {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </button>
+            <div className="flex items-center gap-2 xl:hidden">
+              {user && (
+                <button
+                  onClick={() => {
+                    setIsOpen(true);
+                    setShowNotifications(true);
+                  }}
+                  className="btn-secondary h-9 w-9 p-0 rounded-xl relative"
+                  aria-label="Notifications"
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white ring-2 ring-background">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen((open) => !open)}
+                className="btn-secondary px-2.5 py-1.5"
+                aria-label="Open navigation"
+              >
+                {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
         <AnimatePresence>
@@ -268,6 +378,48 @@ export default function Navbar() {
                   </NavLink>
                 ))}
               </div>
+
+              <AnimatePresence>
+                {showNotifications && user && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="mb-4 overflow-hidden rounded-[1.2rem] border border-border bg-card"
+                  >
+                    <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                      <span className="text-sm font-bold">Notifications</span>
+                      <button 
+                        onClick={() => setShowNotifications(false)}
+                        className="text-xs text-primary font-bold"
+                      >
+                        Hide
+                      </button>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto py-1">
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => handleMarkRead(n.id)}
+                            className={`px-4 py-3 border-b border-border/50 last:border-0 ${!n.is_read ? 'bg-primary/5' : ''}`}
+                          >
+                            <div className="text-sm font-bold text-foreground mb-0.5">{n.title}</div>
+                            <div className="text-xs text-muted-foreground line-clamp-2">{n.message}</div>
+                            <div className="text-[10px] text-muted-foreground/60 mt-1.5">
+                              {new Date(n.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                          No notifications
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <details className="mb-4 rounded-[1.2rem] border border-border bg-card">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">

@@ -261,6 +261,26 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
 
+-- ─── 16. USER SETTINGS ───
+CREATE TABLE IF NOT EXISTS user_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  theme TEXT DEFAULT 'system',
+  autoplay_trailers BOOLEAN DEFAULT true,
+  show_adult_content BOOLEAN DEFAULT false,
+  notify_new_releases BOOLEAN DEFAULT true,
+  notify_recommendations BOOLEAN DEFAULT true,
+  notify_watchlist BOOLEAN DEFAULT false,
+  notify_newsletter BOOLEAN DEFAULT true,
+  age INT,
+  is_adult BOOLEAN DEFAULT true,
+  onboarding_completed BOOLEAN DEFAULT false,
+  preferred_genres TEXT[] DEFAULT '{}',
+  preferred_types TEXT[] DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id);
+
 -- ═══════════════════════════════════════════════════════════════
 -- ROW LEVEL SECURITY
 -- ═══════════════════════════════════════════════════════════════
@@ -280,6 +300,13 @@ ALTER TABLE child_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE watch_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- User settings policies
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own settings" ON user_settings;
+CREATE POLICY "Users can view own settings" ON user_settings FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can upsert own settings" ON user_settings;
+CREATE POLICY "Users can upsert own settings" ON user_settings FOR ALL USING (auth.uid() = user_id);
 
 -- Profiles policies
 DROP POLICY IF EXISTS "Users can view all profiles" ON profiles;

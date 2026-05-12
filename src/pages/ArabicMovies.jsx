@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { tmdbApi } from '../services/tmdb';
-import { arabseedApi } from '../services/arabseed';
 import { Star, Heart, PlusCircle, MinusCircle, Monitor, Tv, Search, Flame, Clapperboard, MonitorPlay, Globe, Film, Flag, Moon, CirclePlay, Swords } from 'lucide-react';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
@@ -10,82 +10,36 @@ import { useLikedMovies } from '../context/LikedMoviesContext';
 const ArabicMovies = () => {
     const [category, setCategory] = useState('trending');
     const [searchQuery, setSearchQuery] = useState('');
-    const [content, setContent] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-
     const navigate = useNavigate();
     const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
     const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
 
-    const fetchContent = useCallback(async (currentPage) => {
-        let data;
-        if (searchQuery.trim()) {
-            data = await tmdbApi.searchArabicContent(searchQuery, currentPage);
-        } else {
+    const { data, isLoading, isError, error } = useQuery({
+        queryKey: ['arabicContent', category, searchQuery, page],
+        queryFn: async () => {
+            if (searchQuery.trim()) {
+                return await tmdbApi.searchArabicContent(searchQuery, page);
+            }
             switch (category) {
-                case 'trending':
-                    data = await tmdbApi.getTrendingArabic(currentPage);
-                    break;
-                case 'popular_movies':
-                    data = await tmdbApi.getArabicMovies(currentPage);
-                    break;
-                case 'arabic_series':
-                    data = await tmdbApi.getArabicTVShows(currentPage);
-                    break;
-                case 'foreign_movies':
-                    data = await tmdbApi.getPopularMovies(currentPage);
-                    break;
-                case 'foreign_series':
-                    data = await tmdbApi.getPopularTVShows(currentPage);
-                    break;
-                case 'turkish':
-                    data = await tmdbApi.getTurkishSeries(currentPage);
-                    break;
-                case 'ramadan':
-                    data = await tmdbApi.getRamadanSeries(currentPage);
-                    break;
-                case 'netflix':
-                    data = await tmdbApi.getNetflixContent(currentPage);
-                    break;
-                case 'wwe':
-                    data = await tmdbApi.getWWEShows(currentPage);
-                    break;
-                default:
-                    data = await tmdbApi.getTrendingArabic(currentPage);
+                case 'trending': return await tmdbApi.getTrendingArabic(page);
+                case 'popular_movies': return await tmdbApi.getArabicMovies(page);
+                case 'arabic_series': return await tmdbApi.getArabicTVShows(page);
+                case 'foreign_movies': return await tmdbApi.getPopularMovies(page);
+                case 'foreign_series': return await tmdbApi.getPopularTVShows(page);
+                case 'turkish': return await tmdbApi.getTurkishSeries(page);
+                case 'ramadan': return await tmdbApi.getRamadanSeries(page);
+                case 'netflix': return await tmdbApi.getNetflixContent(page);
+                case 'wwe': return await tmdbApi.getWWEShows(page);
+                default: return await tmdbApi.getTrendingArabic(page);
             }
-        }
-        return data;
-    }, [category, searchQuery]);
+        },
+        placeholderData: (previousData) => previousData,
+    });
 
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                const data = await fetchContent(page);
-                if (!cancelled) {
-                    setContent(data.results || []);
-                    setTotalPages(Math.min(data.total_pages || 1, 500));
-                }
-            } catch (error) {
-                console.error('Error fetching content:', error);
-                if (!cancelled) {
-                    setContent([]);
-                    setTotalPages(1);
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        loadData();
-        return () => {
-            cancelled = true;
-        };
-    }, [fetchContent, page]);
+    const content = data?.results || [];
+    const totalPages = Math.min(data?.total_pages || 1, 500);
+    const loading = isLoading;
 
     const categories = [
         { id: 'trending', label: 'Trending', sublabel: 'رائج', icon: <Flame className="w-4 h-4" /> },
@@ -110,15 +64,22 @@ const ArabicMovies = () => {
     };
 
     const convertToFormat = (item) => ({
+        id: item.id.toString(),
         imdbID: item.id.toString(),
+        title: item.title || item.name || item.original_title || item.original_name,
         Title: item.title || item.name || item.original_title || item.original_name,
+        year: (item.release_date || item.first_air_date || '').split('-')[0] || 'N/A',
         Year: (item.release_date || item.first_air_date || '').split('-')[0] || 'N/A',
+        poster_url: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
         Poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'N/A',
+        overview: item.overview || '',
         Plot: item.overview || '',
+        type: item.media_type === 'tv' || item.first_air_date ? 'tv' : 'movie',
+        Type: item.media_type === 'tv' || item.first_air_date ? 'tv' : 'movie',
     });
 
-    const isInWatchlist = (id) => watchlist.some(m => m.imdbID === id.toString());
-    const isLiked = (id) => likedMovies.some(m => m.imdbID === id.toString());
+    const isInWatchlist = (id) => watchlist.some(m => m.id === id.toString() || m.imdbID === id.toString());
+    const isLiked = (id) => likedMovies.some(m => m.id === id.toString() || m.imdbID === id.toString());
 
     const handleWatchlistToggle = (e, item) => {
         e.stopPropagation();
@@ -153,7 +114,7 @@ const ArabicMovies = () => {
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     disabled={page === 1}
-                    className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+                    className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-foreground/70 hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all"
                 >
                     Previous
                 </button>
@@ -179,8 +140,8 @@ const ArabicMovies = () => {
                             }}
                             className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
                                 page === pageNum
-                                    ? 'bg-violet-600 text-white'
-                                    : 'bg-muted text-white/70 hover:bg-accent hover:text-white'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-foreground/70 hover:bg-accent hover:text-foreground'
                             }`}
                         >
                             {pageNum}
@@ -194,7 +155,7 @@ const ArabicMovies = () => {
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     disabled={page === totalPages}
-                    className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-white/70 hover:bg-accent hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all"
+                    className="px-4 py-2 rounded-xl font-semibold text-sm bg-muted text-foreground/70 hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-all"
                 >
                     Next
                 </button>
@@ -203,31 +164,31 @@ const ArabicMovies = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#050505]">
+        <div className="min-h-screen bg-background">
             {/* Premium Hero Banner */}
             <div className="relative overflow-hidden py-24 px-4">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-violet-900/20 via-background to-black" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />
                 <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] pointer-events-none" />
 
                 <div className="relative container mx-auto text-center z-10">
                     <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 -500/20 text-violet-400 text-xs font-bold uppercase tracking-widest mb-6"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest mb-6"
                     >
                         <Moon className="w-3.5 h-3.5" /> Premium Catalog
                     </motion.div>
 
                     <motion.h1
-                        className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-white"
+                        className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-foreground"
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
                     >
-                        Arabic & <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">Ramadan</span>
+                        Arabic & <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Ramadan</span>
                     </motion.h1>
                     <motion.p
-                        className="text-white/50 text-lg max-w-2xl mx-auto font-medium"
+                        className="text-muted-foreground text-lg max-w-2xl mx-auto font-medium"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.2 }}
@@ -243,22 +204,22 @@ const ArabicMovies = () => {
                         transition={{ delay: 0.3 }}
                     >
                         <div className="relative group">
-                            <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
-                            <div className="relative flex gap-2 bg-[#0a0a0a] rounded-2xl p-1.5 backdrop-blur-xl">
+                            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                            <div className="relative flex gap-2 bg-card rounded-2xl p-1.5 backdrop-blur-xl">
                                 <div className="flex-1 relative flex items-center">
-                                    <Search className="absolute left-4 w-5 h-5 text-white/30" />
+                                    <Search className="absolute left-4 w-5 h-5 text-muted-foreground" />
                                     <input
                                         type="text"
                                         placeholder="Search titles, actors, or genres..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                        className="w-full bg-transparent pl-12 pr-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-0 font-medium"
+                                        className="w-full bg-transparent pl-12 pr-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 font-medium"
                                     />
                                 </div>
                                 <button
                                     onClick={handleSearch}
-                                    className="px-8 py-3 rounded-xl font-bold text-white bg-violet-600 hover:bg-violet-500 transition-all"
+                                    className="px-8 py-3 rounded-xl font-bold text-primary-foreground bg-primary hover:bg-primary/90 transition-all"
                                 >
                                     Search
                                 </button>
@@ -280,15 +241,16 @@ const ArabicMovies = () => {
                         <button
                             key={cat.id}
                             onClick={() => handleCategoryClick(cat.id)}
-                            className={`group relative px-5 py-3 rounded-2xl font-bold transition-all duration-300 flex items-center gap-2.5 text-sm overflow-hidden  ${category === cat.id
-                                ? 'bg-[#1a1a1a] -500/50 text-white glass-immersive -900/40 transform -translate-y-1'
-                                : 'bg-[#111]  text-white/50 hover:bg-[#151515]  hover:text-white/90'
-                                }`}
+                            className={`group relative px-5 py-3 rounded-2xl font-bold transition-all duration-300 flex items-center gap-2.5 text-sm overflow-hidden ${
+                                category === cat.id
+                                    ? 'bg-surface-container-high text-foreground shadow-lg'
+                                    : 'bg-surface text-muted-foreground hover:bg-surface-container-high hover:text-foreground'
+                            }`}
                         >
                             {category === cat.id && (
-                                <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-fuchsia-600/10" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10" />
                             )}
-                            <div className={`relative z-10 p-1.5 rounded-lg transition-colors ${category === cat.id ? 'bg-violet-500/20 text-violet-400' : 'bg-muted group-hover:bg-accent'}`}>
+                            <div className={`relative z-10 p-1.5 rounded-lg transition-colors ${category === cat.id ? 'bg-primary/20 text-primary' : 'bg-muted group-hover:bg-accent'}`}>
                                 {cat.icon}
                             </div>
                             <span className="relative z-10">{cat.label}</span>
@@ -307,11 +269,11 @@ const ArabicMovies = () => {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="text-center py-32 bg-white/[0.02] rounded-3xl"
+                        className="text-center py-32 bg-card/50 rounded-3xl"
                     >
-                        <Film className="w-16 h-16 text-white/10 mx-auto mb-4" />
-                        <h3 className="text-xl font-black text-white mb-2">No Content Found</h3>
-                        <p className="text-white/40 font-medium">Try checking a different category or refining your search.</p>
+                        <Film className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                        <h3 className="text-xl font-black text-foreground mb-2">No Content Found</h3>
+                        <p className="text-muted-foreground font-medium">Try checking a different category or refining your search.</p>
                     </motion.div>
                 ) : (
                     <>
@@ -323,35 +285,35 @@ const ArabicMovies = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.4) }}
-                                    className="group relative rounded-2xl overflow-hidden bg-[#111] -500/30 transition-all duration-500 cursor-pointer glass-immersive -900/20"
-                                    onClick={() => navigate(item.is_arabseed_direct ? `/watch/${item.id}?arabseedUrl=${encodeURIComponent(item.arabseed_link)}` : `/movie/${item.id}`)}
+                                    className="group relative rounded-2xl overflow-hidden bg-surface transition-all duration-500 cursor-pointer hover:shadow-xl"
+                                    onClick={() => navigate(`/movie/${item.id}`)}
                                 >
                                     {/* Action Buttons */}
                                     <div className="absolute top-3 right-3 z-20 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                         <button
                                             onClick={(e) => handleLikeToggle(e, item)}
-                                            className="bg-card backdrop-blur p-2 rounded-xl hover:bg-violet-600 -500 transition-all"
+                                            className="bg-card/90 backdrop-blur p-2 rounded-xl hover:bg-primary/20 transition-all"
                                         >
-                                            <Heart className={`w-4 h-4 ${isLiked(item.id) ? 'text-red-500 fill-red-500' : 'text-white'}`} />
+                                            <Heart className={`w-4 h-4 ${isLiked(item.id) ? 'text-red-500 fill-red-500' : 'text-foreground'}`} />
                                         </button>
                                         <button
                                             onClick={(e) => handleWatchlistToggle(e, item)}
-                                            className="bg-card backdrop-blur p-2 rounded-xl hover:bg-violet-600 -500 transition-all"
+                                            className="bg-card/90 backdrop-blur p-2 rounded-xl hover:bg-primary/20 transition-all"
                                         >
-                                            {isInWatchlist(item.id) ? <MinusCircle className="w-4 h-4 text-white" /> : <PlusCircle className="w-4 h-4 text-white" />}
+                                            {isInWatchlist(item.id) ? <MinusCircle className="w-4 h-4 text-foreground" /> : <PlusCircle className="w-4 h-4 text-foreground" />}
                                         </button>
                                     </div>
 
                                     {/* Type Badge */}
                                     {isTV(item) && (
-                                        <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-violet-600/90 backdrop-blur-sm text-white -500/50 flex items-center gap-1.5">
+                                        <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-primary/90 backdrop-blur-sm text-primary-foreground flex items-center gap-1.5">
                                             <Tv className="w-3 h-3" /> Series
                                         </div>
                                     )}
 
                                     {/* Poster */}
-                                    <div className="relative aspect-[2/3] overflow-hidden bg-[#1a1a1a]">
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent z-10 opacity-60" />
+                                    <div className="relative aspect-[2/3] overflow-hidden bg-surface-container-high">
+                                        <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 opacity-60" />
                                         <img
                                             src={item.poster_path ? (item.poster_path.startsWith('http') ? item.poster_path : `https://image.tmdb.org/t/p/w500${item.poster_path}`) : 'https://via.placeholder.com/500x750/111/fff?text=No+Poster'}
                                             alt={item.title || item.name}
@@ -360,15 +322,15 @@ const ArabicMovies = () => {
                                         />
 
                                         {/* Play Overlay */}
-                                        <div className="absolute inset-0 z-20 bg-card opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
-                                            <div className="w-12 h-12 rounded-full bg-violet-600 text-white flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-500 glass-immersive -900/50">
+                                        <div className="absolute inset-0 z-20 bg-card/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px]">
+                                            <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-500">
                                                 <Monitor className="w-5 h-5 ml-0.5" />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Info */}
-                                    <div className="p-4 relative z-20 bg-gradient-to-t from-[#0a0a0a] to-[#111]">
+                                    <div className="p-4 relative z-20 bg-gradient-to-t from-card to-surface">
                                         <div className="flex items-center gap-2 mb-1">
                                             {item.vote_average > 0 && (
                                                 <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
@@ -376,14 +338,14 @@ const ArabicMovies = () => {
                                                     {item.vote_average?.toFixed(1)}
                                                 </span>
                                             )}
-                                            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                                                 {(item.release_date || item.first_air_date || '').split('-')[0]}
                                             </span>
                                         </div>
-                                        <h3 className="text-sm font-bold text-white truncate group-hover:text-violet-400 transition-colors">{item.title || item.name}</h3>
+                                        <h3 className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">{item.title || item.name}</h3>
                                         {(item.original_title || item.original_name) &&
                                             (item.original_title || item.original_name) !== (item.title || item.name) && (
-                                                <p className="text-white/40 text-[11px] font-medium truncate mt-0.5" dir="auto">
+                                                <p className="text-muted-foreground text-[11px] font-medium truncate mt-0.5" dir="auto">
                                                     {item.original_title || item.original_name}
                                                 </p>
                                             )}

@@ -1,46 +1,55 @@
+import { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Toaster } from 'sonner';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer';
 import AIAssistant from './components/AIAssistant';
 import Home from './pages/Home';
-import ForYou from './pages/ForYou';
 import MovieDetails from './pages/MovieDetails';
-import WatchMovie from './pages/WatchMovie';
-import Pricing from './pages/Pricing';
-import About from './pages/About';
-import Contact from './pages/Contact';
-import Watchlist from './pages/Watchlist';
-import { LikedMovies } from './pages/LikedMovies';
-import Browse from './pages/Browse';
-import Trending from './pages/Trending';
-import SearchResults from './pages/SearchResults';
-import Profile from './pages/Profile';
-import WatchHistory from './pages/WatchHistory';
-import Actors from './pages/Actors';
-import TVShows from './pages/TVShows';
-import ArabicMovies from './pages/ArabicMovies';
-import LiveTV from './pages/LiveTV';
-import LiveScores from './pages/LiveScores';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import Dashboard from './pages/Dashboard';
-import Books from './pages/Books';
-import BookDetails from './pages/BookDetails';
-import ParentDashboard from './pages/parent/Dashboard';
-import ParentSettings from './pages/parent/Settings';
-import ParentActivity from './pages/parent/Activity';
-import ParentRequests from './pages/parent/Requests';
-import ChildProfile from './pages/parent/ChildProfile';
-import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
+import OnboardingModal from './components/OnboardingModal';
+import { useAuth } from './context/AuthContext';
 import './App.css';
 import { ThemeProvider } from 'next-themes';
 import { WatchlistProvider } from './context/WatchlistContext';
 import { LikedMoviesProvider } from './context/LikedMoviesContext';
 import { AuthProvider } from './context/AuthContext';
 import { ParentalControlProvider } from './context/ParentalControlContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 
-// Scroll to top on every route change
+const ForYou = lazy(() => import('./pages/ForYou'));
+const WatchMovie = lazy(() => import('./pages/WatchMovie'));
+const Pricing = lazy(() => import('./pages/Pricing'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Watchlist = lazy(() => import('./pages/Watchlist'));
+const LikedMovies = lazy(() => import('./pages/LikedMovies'));
+const Browse = lazy(() => import('./pages/Browse'));
+const Trending = lazy(() => import('./pages/Trending'));
+const SearchResults = lazy(() => import('./pages/SearchResults'));
+const Profile = lazy(() => import('./pages/Profile'));
+const WatchHistory = lazy(() => import('./pages/WatchHistory'));
+const Actors = lazy(() => import('./pages/Actors'));
+const TVShows = lazy(() => import('./pages/TVShows'));
+const ArabicMovies = lazy(() => import('./pages/ArabicMovies'));
+const LiveTV = lazy(() => import('./pages/LiveTV'));
+const LiveScores = lazy(() => import('./pages/LiveScores'));
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Books = lazy(() => import('./pages/Books'));
+const BookDetails = lazy(() => import('./pages/BookDetails'));
+const ParentDashboard = lazy(() => import('./pages/parent/Dashboard'));
+const ParentSettings = lazy(() => import('./pages/parent/Settings'));
+const ParentActivity = lazy(() => import('./pages/parent/Activity'));
+const ParentRequests = lazy(() => import('./pages/parent/Requests'));
+const ChildProfile = lazy(() => import('./pages/parent/ChildProfile'));
+const ProtectedRoute = lazy(() => import('./components/ProtectedRoute'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -49,91 +58,140 @@ function ScrollToTop() {
   return null;
 }
 
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-muted-foreground text-sm font-medium">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+function OnboardingGate({ children }) {
+  const { needsOnboarding, loading, completeOnboarding, user } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user && needsOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, [loading, user, needsOnboarding]);
+
+  const handleClose = () => {
+    setShowOnboarding(false);
+    completeOnboarding();
+  };
+
+  return (
+    <>
+      {children}
+      {showOnboarding && (
+        <Suspense fallback={null}>
+          <OnboardingModal onClose={handleClose} isFirstTime={true} />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/for-you" element={<ProtectedRoute><ForYou /></ProtectedRoute>} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/movie/:id" element={<MovieDetails />} />
+          <Route path="/watch/:id" element={<ProtectedRoute><WatchMovie /></ProtectedRoute>} />
+          <Route path="/browse" element={<Browse />} />
+          <Route path="/trending" element={<Trending />} />
+          <Route path="/actors" element={<Actors />} />
+          <Route path="/tv-shows" element={<TVShows />} />
+          <Route path="/arabic" element={<ArabicMovies />} />
+          <Route path="/live-tv" element={<LiveTV />} />
+          <Route path="/live-scores" element={<LiveScores />} />
+          <Route path="/search" element={<SearchResults />} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>} />
+          <Route path="/history" element={<ProtectedRoute><WatchHistory /></ProtectedRoute>} />
+          <Route path="/liked-movies" element={<ProtectedRoute><LikedMovies /></ProtectedRoute>} />
+          <Route path="/books" element={<Books />} />
+          <Route path="/book/:id" element={<BookDetails />} />
+          <Route path="/parent/dashboard" element={<ProtectedRoute requireParent><ParentDashboard /></ProtectedRoute>} />
+          <Route path="/parent/settings" element={<ProtectedRoute requireParent><ParentSettings /></ProtectedRoute>} />
+          <Route path="/parent/activity" element={<ProtectedRoute requireParent><ParentActivity /></ProtectedRoute>} />
+          <Route path="/parent/requests" element={<ProtectedRoute requireParent><ParentRequests /></ProtectedRoute>} />
+          <Route path="/parent/child/:userId" element={<ProtectedRoute requireParent><ChildProfile /></ProtectedRoute>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <AuthProvider>
-        <ParentalControlProvider>
-          <WatchlistProvider>
-            <LikedMoviesProvider>
-              <Router>
-                <ScrollToTop />
-                <div className="min-h-screen flex flex-col">
-                  <Navbar />
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/for-you" element={<ForYou />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/signup" element={<Signup />} />
-                      <Route path="/dashboard" element={
-                        <ProtectedRoute>
-                          <Dashboard />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/movie/:id" element={<MovieDetails />} />
-                      <Route path="/watch/:id" element={<WatchMovie />} />
-                      <Route path="/browse" element={<Browse />} />
-                      <Route path="/trending" element={<Trending />} />
-                      <Route path="/actors" element={<Actors />} />
-                      <Route path="/tv-shows" element={<TVShows />} />
-                      <Route path="/arabic" element={<ArabicMovies />} />
-                      <Route path="/live-tv" element={<LiveTV />} />
-                      <Route path="/live-scores" element={<LiveScores />} />
-                      <Route path="/search" element={<SearchResults />} />
-                      <Route path="/profile" element={
-                        <ProtectedRoute>
-                          <Profile />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/pricing" element={<Pricing />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/contact" element={<Contact />} />
-                      <Route path="/watchlist" element={<Watchlist />} />
-                      <Route path="/history" element={
-                        <ProtectedRoute>
-                          <WatchHistory />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/liked-movies" element={<LikedMovies />} />
-                      <Route path="/books" element={<Books />} />
-                      <Route path="/book/:id" element={<BookDetails />} />
-                      <Route path="/parent/dashboard" element={
-                        <ProtectedRoute requireParent>
-                          <ParentDashboard />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/parent/settings" element={
-                        <ProtectedRoute requireParent>
-                          <ParentSettings />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/parent/activity" element={
-                        <ProtectedRoute requireParent>
-                          <ParentActivity />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/parent/requests" element={
-                        <ProtectedRoute requireParent>
-                          <ParentRequests />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/parent/child/:userId" element={
-                        <ProtectedRoute requireParent>
-                          <ChildProfile />
-                        </ProtectedRoute>
-                      } />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  <AIAssistant />
-                </div>
-              </Router>
-            </LikedMoviesProvider>
-          </WatchlistProvider>
-        </ParentalControlProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <AuthProvider>
+          <ParentalControlProvider>
+            <NotificationsProvider>
+              <WatchlistProvider>
+                <LikedMoviesProvider>
+                  <Router>
+                    <OnboardingGate>
+                      <ScrollToTop />
+                      <div className="min-h-screen flex flex-col">
+                        <Navbar />
+                        <main className="flex-1">
+                          <AppRoutes />
+                        </main>
+                        <Footer />
+                        <AIAssistant />
+                      </div>
+                    </OnboardingGate>
+                  </Router>
+                  <Toaster
+                    position="bottom-right"
+                    richColors
+                    closeButton
+                    toastOptions={{
+                      style: {
+                        background: 'var(--app-card)',
+                        color: 'var(--app-foreground)',
+                        border: '1px solid var(--app-border)',
+                        fontFamily: "'Inter', sans-serif",
+                      },
+                    }}
+                  />
+                </LikedMoviesProvider>
+              </WatchlistProvider>
+            </NotificationsProvider>
+          </ParentalControlProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 
