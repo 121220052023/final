@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Signup() {
   const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +20,7 @@ export default function Signup() {
     setError('');
 
     try {
-      const data = await signUp({ email, password, username, fullName });
+      const data = await signUp({ email, password, username });
       if (data?.user && !data?.session) {
         setSuccess(true);
       } else {
@@ -55,7 +54,7 @@ export default function Signup() {
               </div>
               <h3 className="mt-4 text-lg font-bold text-foreground">Verify your email</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                We've sent a verification link to <span className="font-semibold text-foreground">{email}</span>. 
+                We&apos;ve sent a verification link to <span className="font-semibold text-foreground">{email}</span>. 
                 Please check your inbox to complete your registration.
               </p>
               <Link 
@@ -89,19 +88,6 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-foreground">Full name</label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={(event) => setFullName(event.target.value)}
-                      className="auth-input"
-                      placeholder="Your name"
-                    />
-                  </div>
-                </div>
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground">Email</label>

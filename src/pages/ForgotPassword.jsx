@@ -39,7 +39,7 @@ export default function ForgotPassword() {
             </Link>
             <h1 className="text-2xl font-bold text-foreground">Forgot password?</h1>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we&apos;ll send you a link to reset your password.
             </p>
           </div>
 
@@ -48,13 +48,13 @@ export default function ForgotPassword() {
               <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
               <h3 className="mt-4 text-lg font-bold text-foreground">Check your email</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                We've sent a password reset link to <span className="font-semibold text-foreground">{email}</span>.
+                We&apos;ve sent a password reset link to <span className="font-semibold text-foreground">{email}</span>.
               </p>
               <button 
                 onClick={() => setSuccess(false)}
                 className="mt-6 text-sm font-semibold text-primary hover:underline"
               >
-                Didn't receive the email? Try again
+                Didn&apos;t receive the email? Try again
               </button>
             </div>
           ) : (

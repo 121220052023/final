@@ -4,6 +4,7 @@ import { BookOpen, Clapperboard, Film, Play, Search, Tv } from 'lucide-react';
 import { tmdbApi } from '../services/tmdb';
 import { googleBooksApi } from '../services/googleBooks';
 import Pagination from '../components/Pagination';
+import { useParentalControls } from '../context/ParentalControlContext';
 import { toast } from 'sonner';
 
 const RESULTS_PER_PAGE = 20;
@@ -29,7 +30,7 @@ function toMediaResult(item) {
     meta: [item.release_date?.split('-')[0] || item.first_air_date?.split('-')[0], item.vote_average ? `${item.vote_average.toFixed(1)} rating` : null]
       .filter(Boolean)
       .join(' • '),
-    action: kind === 'tv' ? 'Watch Series' : 'Watch Movie',
+    action: 'Open Details',
   };
 }
 
@@ -54,6 +55,7 @@ export default function SearchResults() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [page, setPage] = useState(1);
   const navigate = useNavigate();
+  const { isContentAllowed, isChild } = useParentalControls();
 
   const searchQuery = searchParams.get('q') || '';
 
@@ -77,6 +79,18 @@ export default function SearchResults() {
 
         const mediaResults = (media.results || [])
           .filter((item) => item.media_type !== 'person')
+          .filter((item) => {
+            if (!isChild) return true;
+            // Map basic TMDB info for ContentFilter check
+            const mapped = {
+              Title: item.title || item.name,
+              Plot: item.overview,
+              Genre: '', // We don't have genres here easily, but keywords will work
+              Rated: 'PG' // Default to PG if unknown to avoid accidental blocking of everything, 
+                          // or default to R if we want to be strict.
+            };
+            return isContentAllowed(mapped);
+          })
           .map(toMediaResult);
         const bookResults = (books.books || []).map(toBookResult);
 
@@ -138,15 +152,6 @@ export default function SearchResults() {
     navigate(`/movie/${item.id}`, { state: { type: item.type } });
   };
 
-  const watchResult = (item) => {
-    if (!item) return;
-    if (item.type === 'book') {
-      navigate(`/book/${item.id}`);
-      return;
-    }
-    navigate(`/watch/${item.id}`, { state: { type: item.type } });
-  };
-
   const handleFilterChange = (filterId) => {
     setActiveFilter(filterId);
     setPage(1);
@@ -170,13 +175,12 @@ export default function SearchResults() {
         </div>
 
         <form onSubmit={submit} className="glass-immersive mb-8 flex flex-col gap-4 rounded-[1.5rem] p-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 items-center gap-3 rounded-full bg-white/4 px-4 py-3">
-            <Search className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-1 items-center gap-3">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search titles, books, authors, or story worlds..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              className="text-input"
               type="search"
             />
           </div>
@@ -269,17 +273,20 @@ export default function SearchResults() {
                       </p>
                       <div className="mt-6 flex flex-wrap gap-3">
                         <button
-                          onClick={(event) => { event.stopPropagation(); watchResult(featured); }}
-                          className="btn-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast.info('Watch feature is temporarily disabled for fixes');
+                          }}
+                          className="btn-primary flex items-center gap-2"
                         >
-                          <Play className="h-4 w-4 fill-white" />
-                          {featured.action}
+                          <Play className="h-4 w-4" />
+                          Watch Now
                         </button>
                         <button
                           onClick={(event) => { event.stopPropagation(); openResult(featured); }}
                           className="btn-secondary"
                         >
-                          Open Details
+                          Details
                         </button>
                       </div>
                     </div>

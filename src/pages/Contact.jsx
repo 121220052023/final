@@ -82,7 +82,7 @@ const Contact = () => {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
+                      className="text-input"
                       placeholder="Your name"
                     />
                   </div>
@@ -101,7 +101,7 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
+                      className="text-input"
                       placeholder="your.email@example.com"
                     />
                   </div>
@@ -120,7 +120,7 @@ const Contact = () => {
                       onChange={handleChange}
                       required
                       rows={6}
-                      className="w-full px-4 py-3 bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all resize-none"
+                      className="text-input min-h-32 resize-none"
                       placeholder="Tell us what's on your mind..."
                     />
                   </div>
@@ -155,7 +155,7 @@ const Contact = () => {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-1">Email</h3>
-                    <p className="text-muted-foreground">support@oceanofmovies.com</p>
+                    <p className="text-muted-foreground">medora9990@gmail.com</p>
                   </div>
                 </div>
 

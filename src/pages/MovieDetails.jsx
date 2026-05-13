@@ -51,11 +51,21 @@ function SimilarCard({ item, onOpen, onWatch }) {
           {getDisplayTitle(item)}
         </button>
         <div className="flex items-center gap-2">
-          <button onClick={() => onWatch(item)} className="btn-primary flex-1 justify-center px-4 py-2 text-sm">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.info('Watch feature is temporarily disabled for fixes');
+            }}
+            className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
+          >
+            <Play className="h-4 w-4" />
             Watch
           </button>
-          <button onClick={() => onOpen(item)} className="btn-secondary px-4 py-2 text-sm">
-            Open
+          <button
+            onClick={() => onOpen(item)}
+            className="btn-primary flex-1 justify-center px-4 py-2 text-sm whitespace-nowrap"
+          >
+            Details
           </button>
         </div>
       </div>
@@ -201,7 +211,7 @@ export default function MovieDetails() {
     return () => {
       cancelled = true;
     };
-  }, [movie, id, isAuthenticated]);
+  }, [movie, id, isAuthenticated, user?.id]);
 
   const averageRating = useMemo(() => {
     if (!reviews.length) return null;
@@ -212,12 +222,6 @@ export default function MovieDetails() {
     const itemId = getMediaId(item);
     if (!itemId) return;
     navigate(`/movie/${itemId}`, { state: { type: item.Type || item.type || 'movie' } });
-  };
-
-  const watchMovie = (item) => {
-    const itemId = getMediaId(item);
-    if (!itemId) return;
-    navigate(`/watch/${itemId}`, { state: { type: item.Type || item.type || 'movie' } });
   };
 
   const handleAISummary = async () => {
@@ -232,6 +236,7 @@ export default function MovieDetails() {
       const summary = await getAISummary(movie);
       console.log('AI Summary received:', summary);
       setAiSummary(summary);
+      setShowAISummary(true);
       toast.success('AI summary generated');
     } catch (error) {
       console.error('Error generating AI summary:', error);
@@ -377,7 +382,7 @@ export default function MovieDetails() {
   const rating = getRatingValue(movie);
 
   return (
-    <ContentFilter movie={movie} fallback={<ParentalGate />}>
+    <ContentFilter movie={movie}>
       <div className="pb-20 pt-24">
         {showTrailer && trailer ? (
           <div className="fixed inset-0 z-[60] bg-black/82 p-4 backdrop-blur-md">
@@ -440,10 +445,6 @@ export default function MovieDetails() {
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-3">
-                  <button onClick={() => watchMovie(movie)} className="btn-primary px-6 py-3.5">
-                    <Play className="h-4 w-4 fill-white" />
-                    {movie.Type === 'tv' ? 'Watch series' : 'Watch movie'}
-                  </button>
                   {trailer ? (
                     <button onClick={() => setShowTrailer(true)} className="btn-secondary border-white/20 bg-black/30 px-6 py-3.5 text-white">
                       Trailer
@@ -471,7 +472,7 @@ export default function MovieDetails() {
                   <div className="stat-tile">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Rating</div>
                     <div className="mt-2 flex items-center gap-2 text-3xl font-bold text-foreground">
-                      <Star className="h-6 w-6 fill-current text-secondary" />
+                      <Star className="h-6 w-6 fill-current text-yellow-400" />
                       {rating ? rating.toFixed(1) : movie.imdbRating || 'N/A'}
                     </div>
                   </div>
@@ -560,7 +561,7 @@ export default function MovieDetails() {
 
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 {similarMovies.slice(0, 4).map((item) => (
-                  <SimilarCard key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+                  <SimilarCard key={getMediaId(item)} item={item} onOpen={openMovie} />
                 ))}
               </div>
             </section>
@@ -632,10 +633,12 @@ export default function MovieDetails() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                            {(review.profiles?.username || review.profiles?.full_name || 'U')[0].toUpperCase()}
+                            {(review.profiles?.full_name || review.profiles?.username || 'U')[0].toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-semibold text-foreground">{review.profiles?.username || review.profiles?.full_name || 'Anonymous'}</div>
+                            <div className="font-semibold text-foreground">
+                              {review.profiles?.full_name || review.profiles?.username || 'Anonymous'}
+                            </div>
                             <div className="text-xs text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</div>
                           </div>
                         </div>
@@ -699,9 +702,18 @@ export default function MovieDetails() {
               <p className="mt-5 text-base leading-8 text-foreground">
                 {aiSummary}
               </p>
-              <button onClick={() => setShowAISummary(false)} className="btn-secondary mt-6 w-full justify-center">
-                Close
-              </button>
+              <div className="mt-8 flex gap-3">
+                <button
+                  onClick={handleToggleLike}
+                  className={`btn-secondary flex-1 justify-center py-3 ${isLiked ? 'bg-red-500/10 text-red-500 border-red-500/20' : ''}`}
+                >
+                  <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500' : ''}`} />
+                  {isLiked ? 'Liked' : 'Like this title'}
+                </button>
+                <button onClick={() => setShowAISummary(false)} className="btn-primary flex-1 justify-center py-3">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Star, Monitor, Tv, ExternalLink, ShieldCheck, ChevronDown, Play, Zap } from 'lucide-react';
+import { ArrowLeft, Star, Monitor, Tv, ExternalLink, ShieldCheck, ChevronDown, Play, Zap, Globe, AlertCircle } from 'lucide-react';
 import { getMovieDetails } from '../services/imdbService';
 import { tmdbApi } from '../services/tmdb';
 import ContentFilter from '../components/ContentFilter';
 import ParentalGate from '../components/ParentalGate';
 import { useAuth } from '../context/AuthContext';
+import { useParentalControls } from '../context/ParentalControlContext';
 import { watchHistoryService } from '../services/supabaseService';
 
 const WatchMovie = () => {
@@ -16,12 +17,16 @@ const WatchMovie = () => {
     const location = useLocation();
     const typeParam = location.state?.type;
     const { user, session } = useAuth();
+    const { isChild, incrementWatchTime } = useParentalControls();
     
     // UI State
     const [selectedServer, setSelectedServer] = useState(0);
     const [selectedSeason, setSelectedSeason] = useState(1);
     const [selectedEpisode, setSelectedEpisode] = useState(1);
     const [showSeasonDropdown, setShowSeasonDropdown] = useState(false);
+    const [isPlayerLoading, setIsPlayerLoading] = useState(true);
+    const [isTheaterMode, setIsTheaterMode] = useState(false);
+    const playerContainerRef = useRef(null);
 
     // Watch time tracking refs
     const watchStartTime = useRef(null);
@@ -35,7 +40,7 @@ const WatchMovie = () => {
         enabled: !!id,
     });
 
-    const isTV = content?.Type === 'tv';
+    const isTV = typeParam === 'tv' || content?.Type === 'tv';
 
     // 2. Fetch TV Show Details (for seasons)
     const { data: tvDetails } = useQuery({
@@ -60,6 +65,7 @@ const WatchMovie = () => {
     // History Mutation
     const updateHistoryMutation = useMutation({
         mutationFn: async ({ progressPercent, watchedSec, uniqueId, title }) => {
+            if (!user) return;
             const movieData = {
                 imdbID: uniqueId,
                 Title: title,
@@ -105,6 +111,11 @@ const WatchMovie = () => {
             watchStartTime.current = Date.now();
             intervalRef.current = setInterval(() => {
                 watchedSeconds.current += 1;
+                
+                // If user is a child, increment their daily watch time every minute
+                if (isChild && watchedSeconds.current % 60 === 0) {
+                    incrementWatchTime(1).catch(err => console.error("Failed to increment watch time:", err));
+                }
             }, 1000);
         }
 
@@ -123,17 +134,79 @@ const WatchMovie = () => {
         setSelectedSeason(seasonNum);
         setSelectedEpisode(1);
         setShowSeasonDropdown(false);
+        setIsPlayerLoading(true);
     };
 
-    const getServers = (type, id, s = 1, e = 1) => {
-        const isTV = type === 'tv';
+    const handleServerChange = (index) => {
+        setSelectedServer(index);
+        setIsPlayerLoading(true);
+    };
+
+    const handleEpisodeChange = (epNum) => {
+        setSelectedEpisode(epNum);
+        setIsPlayerLoading(true);
+    };
+
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleRefresh = () => {
+        setRefreshKey(prev => prev + 1);
+        setIsPlayerLoading(true);
+    };
+
+    // Safety timeout for player loading
+    useEffect(() => {
+        let timer;
+        if (isPlayerLoading) {
+            timer = setTimeout(() => {
+                setIsPlayerLoading(false);
+            }, 8000); // 8 seconds safety timeout
+        }
+        return () => clearTimeout(timer);
+    }, [isPlayerLoading]);
+
+    const getServers = (type, tmdbId, imdbId, s = 1, e = 1) => {
+        const isTV = type === 'tv' || type === 'Series';
+        const finalImdbId = imdbId && imdbId.startsWith('tt') ? imdbId : null;
+        
         return [
-            { name: 'VidLink (Multi)', url: isTV ? `https://vidlink.pro/tv/${id}/${s}/${e}` : `https://vidlink.pro/movie/${id}`, icon: ShieldCheck },
-            { name: 'AutoEmbed (Fast)', url: isTV ? `https://autoembed.co/tv/tmdb/${id}-${s}-${e}` : `https://autoembed.co/movie/tmdb/${id}`, icon: Zap },
-            { name: 'Embed.su (HD)', url: isTV ? `https://embed.su/embed/tv/${id}/${s}/${e}` : `https://embed.su/embed/movie/${id}`, icon: Monitor },
-            { name: 'Vidsrc.net', url: isTV ? `https://vidsrc.net/embed/tv?tmdb=${id}&season=${s}&episode=${e}` : `https://vidsrc.net/embed/movie?tmdb=${id}`, icon: Tv },
-            { name: 'Vidsrc.cc', url: isTV ? `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` : `https://vidsrc.cc/v2/embed/movie/${id}`, icon: Play },
+            { 
+                name: 'Vidsrc.me', 
+                url: isTV ? `https://vidsrc.me/embed/tv?tmdb=${tmdbId}&season=${s}&episode=${e}` : `https://vidsrc.me/embed/movie?tmdb=${tmdbId}`, 
+                icon: Monitor 
+            },
+            { 
+                name: 'VidSrc.cc', 
+                url: isTV ? `https://vidsrc.cc/v2/embed/tv/${tmdbId}/${s}/${e}` : `https://vidsrc.cc/v2/embed/movie/${tmdbId}`, 
+                icon: Zap 
+            },
+            { 
+                name: 'Embed.su', 
+                url: isTV ? `https://embed.su/embed/tv/${tmdbId}/${s}/${e}` : `https://embed.su/embed/movie/${tmdbId}`, 
+                icon: Tv 
+            },
+            { 
+                name: 'Vidsrc.xyz', 
+                url: isTV ? `https://vidsrc.xyz/embed/tv?tmdb=${tmdbId}&season=${s}&episode=${e}` : `https://vidsrc.xyz/embed/movie?tmdb=${tmdbId}`, 
+                icon: Play 
+            },
+            {
+                name: '2Embed',
+                url: isTV ? `https://www.2embed.cc/embedtv/${tmdbId}&s=${s}&e=${e}` : `https://www.2embed.cc/embed/${tmdbId}`,
+                icon: Globe
+            }
         ];
+    };
+
+    const toggleFullscreen = () => {
+        if (!playerContainerRef.current) return;
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            playerContainerRef.current.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
+        }
     };
 
     if (isContentLoading) {
@@ -145,90 +218,258 @@ const WatchMovie = () => {
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                     />
-                    <p className="text-white/50 text-sm font-medium">Loading player...</p>
+                    <p className="text-white/50 text-sm font-medium tracking-widest uppercase">Loading Theater Experience...</p>
                 </motion.div>
             </div>
         );
     }
 
-    const currentServers = getServers(content?.Type, id, selectedSeason, selectedEpisode);
+    const currentServers = getServers(content?.Type, id, content?.imdbID, selectedSeason, selectedEpisode);
     const hasRating = content?.imdbRating && content.imdbRating !== 'N/A' && content.imdbRating !== '0.0';
     const hasYear = content?.Year && content.Year !== 'N/A';
     const hasPlot = content?.Plot && content.Plot !== 'N/A' && content.Plot !== 'No plot available';
 
     return (
-        <ContentFilter movie={content} fallback={<ParentalGate />}>
-            <div className="min-h-screen bg-black text-white/90 selection:bg-violet-500/30">
-                {/* Top Bar */}
-                <motion.div className="sticky top-0 z-50 bg-card backdrop-blur-xl" initial={{ y: -60 }} animate={{ y: 0 }}>
-                    <div className="container mx-auto px-4 py-2.5 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent transition-all text-xs font-medium">
-                                <ArrowLeft className="w-4 h-4" /> Back
-                            </button>
-                            <div className="hidden sm:flex items-center gap-2">
-                                <h1 className="font-bold text-sm truncate max-w-[200px] md:max-w-md">{content?.Title}</h1>
-                                {isTV && <span className="text-violet-400 text-[10px] font-bold uppercase tracking-wider bg-violet-400/10 px-1.5 py-0.5 rounded">S{selectedSeason} E{selectedEpisode}</span>}
-                            </div>
-                        </div>
-                        <Link to={`/movie/${id}`} className="flex items-center gap-1.5 text-white/30 hover:text-white/80 transition-colors text-xs">
-                            <ExternalLink className="w-3.5 h-3.5" /> Details
-                        </Link>
-                    </div>
-                </motion.div>
-
-                <div className="container mx-auto px-4 py-4 max-w-7xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                        <div className="lg:col-span-3 flex flex-col gap-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] p-2 rounded-xl">
-                                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
-                                    {currentServers.map((server, index) => (
-                                        <button key={index} onClick={() => setSelectedServer(index)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${selectedServer === index ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'bg-muted text-white/40 hover:bg-accent'}`}>
-                                            <server.icon className="w-3.5 h-3.5" /> {server.name}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex items-center gap-2 text-violet-400/80 text-[10px] font-bold uppercase overflow-hidden">
-                                    <ShieldCheck className="w-3.5 h-3.5" /> <span>Ad-Clean Mode</span>
-                                </div>
-                            </div>
-
-                            <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-2xl group">
-                                <iframe key={`${selectedServer}-${selectedSeason}-${selectedEpisode}`} src={currentServers[selectedServer].url} className="absolute inset-0 w-full h-full" frameBorder="0" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" title="Player" />
-                            </div>
-
-                            <div className="p-6 rounded-2xl bg-white/[0.02]">
-                                <div className="flex flex-col md:flex-row gap-6">
-                                    {content?.Poster && <img src={content.Poster} alt="Poster" className="w-24 h-36 object-cover rounded-xl hidden md:block" />}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h2 className="text-xl font-black">{content?.Title}</h2>
-                                            {hasRating && <div className="flex items-center gap-1 text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded text-[11px] font-bold"><Star className="w-3 h-3 fill-amber-400" /> {content.imdbRating}</div>}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 mb-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                                            {hasYear && <span>{content.Year}</span>}
-                                            {content?.Genre && content.Genre !== 'N/A' && <><span>•</span><span>{content.Genre}</span></>}
-                                            {content?.Type && <><span>•</span><span className="text-violet-400">{content.Type}</span></>}
-                                        </div>
-                                        {hasPlot && <p className="text-white/40 text-xs leading-relaxed line-clamp-2 max-w-3xl">{content.Plot}</p>}
+        <ContentFilter movie={content}>
+            <div className="pb-20 pt-24 bg-background text-foreground min-h-screen">
+                <div className="page-shell-wide">
+                    {/* Header Section */}
+                    <motion.div 
+                        className="editorial-panel rounded-[2rem] p-6 sm:p-8 mb-8" 
+                        initial={{ y: 20, opacity: 0 }} 
+                        animate={{ y: 0, opacity: 1 }}
+                    >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                            <div className="flex items-start gap-5">
+                                <button onClick={() => navigate(-1)} className="btn-secondary group">
+                                    <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                                    Back
+                                </button>
+                                <div>
+                                    <h1 className="display-font text-2xl sm:text-3xl font-black text-foreground leading-none">{content?.Title}</h1>
+                                    <div className="flex items-center gap-3 mt-2">
+                                        {isTV ? (
+                                            <span className="text-violet-400 text-[10px] font-black uppercase tracking-[0.2em] bg-violet-400/10 px-2.5 py-1 rounded-md border border-violet-400/20">
+                                                Season {selectedSeason} • Episode {selectedEpisode}
+                                            </span>
+                                        ) : (
+                                            <span className="text-violet-400 text-[10px] font-black uppercase tracking-[0.2em] bg-violet-400/10 px-2.5 py-1 rounded-md border border-violet-400/20">
+                                                Feature Film
+                                            </span>
+                                        )}
+                                        {hasYear && <span className="text-sm text-muted-foreground font-medium">• {content.Year}</span>}
+                                        {hasRating && (
+                                            <div className="flex items-center gap-1.5 ml-1">
+                                                <Star className="w-3.5 h-3.5 text-yellow-400 fill-current" />
+                                                <span className="text-sm font-bold">{content.imdbRating}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
+                            <Link to={`/movie/${id}`} className="btn-quiet self-start sm:self-center">
+                                <ExternalLink className="w-4 h-4" />
+                                Movie Details
+                            </Link>
+                        </div>
+                    </motion.div>
+
+                    <div className="grid gap-8 lg:grid-cols-4">
+                        {/* Main Player Area */}
+                        <div className="lg:col-span-3 space-y-8">
+                            {/* Server Selection Bar */}
+                            <motion.div 
+                                className="editorial-panel rounded-[1.5rem] p-4 bg-muted/30 border border-border/50" 
+                                initial={{ y: 20, opacity: 0 }} 
+                                animate={{ y: 0, opacity: 1 }} 
+                                transition={{ delay: 0.1 }}
+                            >
+                                <div className="flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mr-2">Servers:</div>
+                                        {currentServers.map((server, index) => (
+                                            <button
+                                                key={server.name}
+                                                onClick={() => handleServerChange(index)}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                                                    selectedServer === index 
+                                                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30 ring-2 ring-violet-500/20' 
+                                                    : 'bg-background/50 text-muted-foreground border border-border/50 hover:bg-accent'
+                                                }`}
+                                            >
+                                                <server.icon className="w-3 h-3" />
+                                                {server.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => setIsTheaterMode(!isTheaterMode)}
+                                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isTheaterMode ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-background/50 text-muted-foreground border border-border/50 hover:bg-accent'}`}
+                                        >
+                                            {isTheaterMode ? 'Exit Theater' : 'Theater Mode'}
+                                        </button>
+                                        <button 
+                                            onClick={toggleFullscreen}
+                                            className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
+                                        >
+                                            <Monitor className="w-3.5 h-3.5" />
+                                            Fullscreen
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Video Player Container */}
+                            <motion.div 
+                                ref={playerContainerRef}
+                                className={`editorial-panel rounded-[2.5rem] p-2 bg-black shadow-2xl relative overflow-hidden group transition-all duration-500 ${isTheaterMode ? 'lg:-mx-24' : ''}`} 
+                                initial={{ y: 20, opacity: 0 }} 
+                                animate={{ y: 0, opacity: 1 }} 
+                                transition={{ delay: 0.2 }}
+                            >
+                                <div className="relative aspect-video w-full rounded-[2rem] overflow-hidden bg-black shadow-inner">
+                                    <AnimatePresence>
+                                        {isPlayerLoading && (
+                                            <motion.div 
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl"
+                                            >
+                                                <div className="relative">
+                                                    <motion.div
+                                                        className="w-24 h-24 border-4 border-violet-500/10 border-t-violet-500 rounded-full"
+                                                        animate={{ rotate: 360 }}
+                                                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                                                    />
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <Play className="w-10 h-10 text-violet-500 animate-pulse" />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-10 text-center space-y-3">
+                                                    <h3 className="text-white text-xl font-black tracking-tighter uppercase italic leading-none">Initializing Stream</h3>
+                                                    <div className="flex items-center gap-3 justify-center">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                                        <p className="text-white/50 text-[11px] font-bold uppercase tracking-[0.3em]">Connecting to Secure Server</p>
+                                                    </div>
+                                                </div>
+                                                <div className="absolute bottom-12 px-8 py-3 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+                                                    <p className="text-[10px] text-white/40 font-black uppercase tracking-[0.25em]">Bypassing External Ads...</p>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                    
+                                    <iframe 
+                                        key={`${selectedServer}-${selectedSeason}-${selectedEpisode}-${refreshKey}`} 
+                                        src={currentServers[selectedServer].url} 
+                                        className="absolute inset-0 w-full h-full z-10" 
+                                        frameBorder="0" 
+                                        allowFullScreen 
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
+                                        title="Player"
+                                        referrerPolicy="no-referrer"
+                                        onLoad={() => {
+                                            setTimeout(() => setIsPlayerLoading(false), 1000);
+                                        }}
+                                    />
+                                    
+                                    {/* Ambient overlay */}
+                                    <div className="absolute inset-0 pointer-events-none z-20 bg-gradient-to-tr from-white/5 to-transparent opacity-20" aria-hidden="true" />
+                                </div>
+                            </motion.div>
+
+                            {/* Info Section */}
+                            <motion.div 
+                                className="editorial-panel rounded-[2rem] p-8" 
+                                initial={{ y: 20, opacity: 0 }} 
+                                animate={{ y: 0, opacity: 1 }} 
+                                transition={{ delay: 0.3 }}
+                            >
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    {content?.Poster && content.Poster !== 'N/A' && (
+                                        <div className="shrink-0">
+                                            <img 
+                                                src={content.Poster} 
+                                                alt={content.Title} 
+                                                className="w-32 aspect-[2/3] object-cover rounded-2xl shadow-xl border border-border/50 hidden md:block" 
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 space-y-6">
+                                        <div>
+                                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-violet-400 mb-3">Plot Summary</h3>
+                                            <p className="text-sm leading-relaxed text-muted-foreground font-medium italic">
+                                                "{hasPlot ? content.Plot : 'No description available for this title.'}"
+                                            </p>
+                                        </div>
+
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            <div className="rounded-2xl border border-border/50 bg-muted/20 p-4">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Content Rating</div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-yellow-400/10 flex items-center justify-center">
+                                                        <Star className="w-5 h-5 text-yellow-400 fill-current" />
+                                                    </div>
+                                                    <span className="text-xl font-black">{content?.imdbRating || 'N/A'}<span className="text-xs text-muted-foreground ml-1">/10</span></span>
+                                                </div>
+                                            </div>
+                                            {content?.Genre && (
+                                                <div className="rounded-2xl border border-border/50 bg-muted/20 p-4">
+                                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Genre Classification</div>
+                                                    <div className="text-sm font-bold text-foreground">
+                                                        {content.Genre.split(', ').slice(0, 3).join(' • ')}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
                         </div>
 
-                        <div className="lg:col-span-1 flex flex-col gap-4 max-h-[700px]">
-                            {isTV ? (
-                                <div className="bg-white/[0.02] rounded-2xl flex flex-col h-full overflow-hidden">
-                                    <div className="p-4 flex items-center justify-between bg-white/[0.01]">
-                                        <h3 className="text-sm font-black flex items-center gap-2"><Tv className="w-4 h-4 text-violet-400" /> Episodic Content</h3>
+                        {/* Sidebar */}
+                        <div className="lg:col-span-1 space-y-8">
+                            {isTV && (
+                                <motion.div 
+                                    className="editorial-panel rounded-[2rem] p-6 flex flex-col lg:h-[700px] h-[500px] overflow-hidden bg-background/50 backdrop-blur-sm" 
+                                    initial={{ x: 20, opacity: 0 }} 
+                                    animate={{ x: 0, opacity: 1 }} 
+                                    transition={{ delay: 0.4 }}
+                                >
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-sm font-black flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                                                <Tv className="w-4 h-4 text-violet-400" />
+                                            </div>
+                                            Episodes
+                                        </h3>
                                         <div className="relative">
-                                            <button onClick={() => setShowSeasonDropdown(!showSeasonDropdown)} className="flex items-center gap-1.5 px-3 py-1 bg-violet-600/20 text-violet-400 rounded-lg text-xs font-bold hover:bg-violet-600/30 transition-all">Season {selectedSeason} <ChevronDown className={`w-3 h-3 transition-transform ${showSeasonDropdown ? 'rotate-180' : ''}`} /></button>
+                                            <button
+                                                onClick={() => setShowSeasonDropdown(!showSeasonDropdown)}
+                                                className="btn-secondary text-[11px] font-black uppercase tracking-widest px-4 py-2 bg-muted/50"
+                                            >
+                                                S{selectedSeason}
+                                                <ChevronDown className={`w-3.5 h-3.5 ml-2 transition-transform duration-300 ${showSeasonDropdown ? 'rotate-180' : ''}`} />
+                                            </button>
                                             <AnimatePresence>
                                                 {showSeasonDropdown && (
-                                                    <motion.div className="absolute right-0 top-full mt-2 w-36 bg-neutral-900 rounded-xl shadow-2xl z-50 py-2 border border-white/5" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                                                        <div className="max-h-60 overflow-y-auto scrollbar-hide py-1">
+                                                    <motion.div
+                                                        className="absolute right-0 top-full mt-3 w-44 bg-card/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-border/50 py-3 z-50 overflow-hidden"
+                                                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                    >
+                                                        <div className="max-h-64 overflow-y-auto scrollbar-hide px-2 space-y-1">
                                                             {seasons.map((s) => (
-                                                                <button key={s.id} onClick={() => handleSeasonChange(s.season_number)} className={`w-full px-4 py-2 text-left text-xs font-bold hover:bg-muted transition-colors ${selectedSeason === s.season_number ? 'text-violet-400 bg-violet-400/5' : 'text-white/50'}`}>{s.name}</button>
+                                                                <button
+                                                                    key={s.id}
+                                                                    onClick={() => handleSeasonChange(s.season_number)}
+                                                                    className={`w-full px-4 py-2.5 text-left text-[11px] font-bold rounded-xl transition-all ${selectedSeason === s.season_number ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                                                                >
+                                                                    Season {s.season_number}
+                                                                </button>
                                                             ))}
                                                         </div>
                                                     </motion.div>
@@ -237,33 +478,113 @@ const WatchMovie = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                                    <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3 scrollbar-hide">
                                         {isLoadingEpisodes ? (
-                                            <div className="flex flex-col gap-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-muted rounded-lg animate-pulse" />)}</div>
+                                            <div className="space-y-4">
+                                                {[1, 2, 3, 4, 5, 6].map(i => (
+                                                    <div key={i} className="h-16 rounded-2xl bg-muted/30 animate-pulse" />
+                                                ))}
+                                            </div>
                                         ) : (
                                             episodes.map((ep) => (
-                                                <button key={ep.id} onClick={() => setSelectedEpisode(ep.episode_number)} className={`w-full group flex items-center gap-3 p-3 rounded-xl transition-all ${selectedEpisode === ep.episode_number ? 'bg-violet-600/20 text-white border border-violet-500/20' : 'bg-white/[0.01] text-white/40 hover:bg-muted'}`}>
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${selectedEpisode === ep.episode_number ? 'bg-violet-500 text-white' : 'bg-muted text-white/30 group-hover:bg-accent'}`}>{ep.episode_number}</div>
-                                                    <div className="flex-1 text-left min-w-0">
-                                                        <p className="text-[11px] font-bold truncate">{ep.name && !ep.name.toLowerCase().includes(`episode ${ep.episode_number}`) ? ep.name : `Episode ${ep.episode_number}`}</p>
-                                                        <p className="text-[9px] opacity-40 uppercase tracking-tighter">Season {selectedSeason} • Ep {ep.episode_number}</p>
+                                                <button
+                                                    key={ep.id}
+                                                    onClick={() => handleEpisodeChange(ep.episode_number)}
+                                                    className={`w-full group relative flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 ${selectedEpisode === ep.episode_number ? 'bg-violet-600/10 border-violet-500/30 text-violet-400' : 'bg-muted/30 hover:bg-accent border-transparent'}`}
+                                                >
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-all duration-300 ${selectedEpisode === ep.episode_number ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/40' : 'bg-muted text-muted-foreground group-hover:bg-violet-500/20'}`}>
+                                                        {ep.episode_number}
                                                     </div>
-                                                    {selectedEpisode === ep.episode_number && <motion.div layoutId="playing-icon"><Play className="w-3 h-3 fill-white" /></motion.div>}
+                                                    <div className="flex-1 min-w-0 text-left">
+                                                        <p className="text-[13px] font-black truncate leading-tight">
+                                                            {ep.name && !ep.name.toLowerCase().includes(`episode ${ep.episode_number}`) ? ep.name : `Episode ${ep.episode_number}`}
+                                                        </p>
+                                                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1 opacity-60">
+                                                            S{selectedSeason} E{ep.episode_number}
+                                                        </p>
+                                                    </div>
+                                                    {selectedEpisode === ep.episode_number && (
+                                                        <motion.div layoutId="playing-indicator" className="w-2 h-2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
+                                                    )}
                                                 </button>
                                             ))
                                         )}
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="bg-white/[0.02] rounded-2xl p-6 text-center flex flex-col items-center justify-center h-full gap-4">
-                                    <div className="w-16 h-16 rounded-full bg-violet-500/10 flex items-center justify-center"><Monitor className="w-8 h-8 text-violet-400" /></div>
-                                    <div><h4 className="font-black text-sm mb-1 uppercase tracking-widest">Single Content</h4><p className="text-[10px] text-white/30 leading-relaxed uppercase tracking-tighter">Feature film playback active. No episodic data required.</p></div>
-                                </div>
+                                </motion.div>
                             )}
 
-                            <div className="p-4 rounded-2xl bg-amber-400/5 border border-amber-400/10">
-                                <div className="flex items-center gap-2 mb-2"><ShieldCheck className="w-4 h-4 text-amber-400" /><h4 className="text-[10px] font-black uppercase tracking-widest text-amber-400">Security Tip</h4></div>
-                                <p className="text-[9px] text-white/40 leading-relaxed">Browsing without ads? We recommend the <a href="https://ublockorigin.com/" className="text-amber-400/80 underline decoration-amber-400/30">uBlock Origin</a> extension.</p>
+                            {!isTV && (
+                                <motion.div 
+                                    className="editorial-panel rounded-[2rem] p-8 text-center bg-violet-500/5 border border-violet-500/10" 
+                                    initial={{ x: 20, opacity: 0 }} 
+                                    animate={{ x: 0, opacity: 1 }} 
+                                    transition={{ delay: 0.4 }}
+                                >
+                                    <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mx-auto mb-5 shadow-inner">
+                                        <Monitor className="w-8 h-8 text-violet-400" />
+                                    </div>
+                                    <h4 className="font-black text-sm uppercase tracking-widest mb-3">Cinema Mode</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed font-medium italic">
+                                        Content optimized for widescreen streaming. Enjoy the show!
+                                    </p>
+                                </motion.div>
+                            )}
+
+                            <motion.div 
+                                className="editorial-panel rounded-[2rem] p-6 bg-amber-500/5 border border-amber-500/10" 
+                                initial={{ x: 20, opacity: 0 }} 
+                                animate={{ x: 0, opacity: 1 }} 
+                                transition={{ delay: 0.5 }}
+                            >
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                                        <ShieldCheck className="w-4 h-4 text-amber-500" />
+                                    </div>
+                                    <h4 className="text-sm font-black uppercase tracking-tighter text-amber-600 dark:text-amber-400">Stream Safety</h4>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                                    Running in native mode for maximum compatibility. For zero distractions, use{' '}
+                                    <a
+                                        href="https://ublockorigin.com/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-amber-600 dark:text-amber-400 hover:underline font-bold"
+                                    >
+                                        uBlock Origin
+                                    </a>{' '}
+                                    on your browser.
+                                </p>
+                            </motion.div>
+                        </div>
+                    </div>
+
+                    {/* Troubleshooting Panel */}
+                    <div className="mt-8 rounded-2xl bg-muted/30 p-6 border border-white/5">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                                <AlertCircle className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-bold text-foreground">Troubleshooting</h3>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <p className="text-sm text-white/70 font-medium">Player not loading?</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Try switching to a different server above. Each server uses a different streaming source.
+                                </p>
+                                <button 
+                                    onClick={handleRefresh}
+                                    className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold transition-all border border-white/10"
+                                >
+                                    <Zap className="w-3.5 h-3.5" />
+                                    Force Refresh Player
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                <p className="text-sm text-white/70 font-medium">Ad Blockers & Popups</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Some servers may show ads. We block most of them, but using an ad-blocker like uBlock Origin is recommended for the best experience.
+                                </p>
                             </div>
                         </div>
                     </div>

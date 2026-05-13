@@ -140,6 +140,21 @@ export const ParentalControlProvider = ({ children }) => {
     enabled: !!user && (userRole === 'child' || !!familyGroupId),
   })
 
+  // 6. Fetch Approved Movies for current user
+  const { data: approvedMovies = [] } = useQuery({
+    queryKey: ['approvedMovies', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('watch_requests')
+        .select('movie_id')
+        .eq('user_id', user.id)
+        .eq('status', 'approved')
+      if (error) throw error
+      return data.map(r => r.movie_id)
+    },
+    enabled: !!user && userRole === 'child',
+  })
+
   // Mutations
   const createGroupMutation = useMutation({
     mutationFn: async (name) => {
@@ -219,13 +234,38 @@ export const ParentalControlProvider = ({ children }) => {
     }
   })
 
+  const incrementWatchTimeMutation = useMutation({
+    mutationFn: async (minutes) => {
+      if (!isChild || !childProfile) return
+      const { data, error } = await supabase
+        .from('child_profiles')
+        .update({ 
+          time_used_today: (childProfile.time_used_today || 0) + minutes,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('user_id', user.id)
+        .select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['childProfile', user?.id] })
+    }
+  })
+
   // Helper Logic
   const isParent = userRole === 'parent'
   const isChild = userRole === 'child'
   const isLoading = isMembershipLoading || isGroupLoading || isMembersLoading || isSettingsLoading || isChildProfileLoading
 
+  const isMovieApproved = useCallback((movie) => {
+    const movieId = (movie.id || movie.imdbID)?.toString()
+    return approvedMovies.includes(movieId)
+  }, [approvedMovies])
+
   const isContentAllowed = useCallback((movie) => {
     if (!isChild || !parentalSettings) return true
+    if (isMovieApproved(movie)) return true
 
     const maxRating = childProfile?.custom_max_rating || parentalSettings.max_rating || 'PG-13'
     const ratingOrder = { G: 0, PG: 1, 'PG-13': 2, R: 3, 'NC-17': 4 }
@@ -244,8 +284,8 @@ export const ParentalControlProvider = ({ children }) => {
 
     const blockedKeywords = parentalSettings.blocked_keywords || []
     if (blockedKeywords.length > 0) {
-      const title = (movie.Title || '').toLowerCase()
-      const plot = (movie.Plot || '').toLowerCase()
+      const title = (movie.Title || movie.title || '').toLowerCase()
+      const plot = (movie.Plot || movie.overview || '').toLowerCase()
       const hasBlocked = blockedKeywords.some(kw => title.includes(kw.toLowerCase()) || plot.includes(kw.toLowerCase()))
       if (hasBlocked) return false
     }
@@ -253,7 +293,7 @@ export const ParentalControlProvider = ({ children }) => {
     if (parentalSettings.block_adult_content && movie.Rated === 'NC-17') return false
 
     return true
-  }, [isChild, parentalSettings, childProfile])
+  }, [isChild, parentalSettings, childProfile, isMovieApproved])
 
   const isBedtime = useCallback(() => {
     if (!isChild || !parentalSettings) return false
@@ -282,10 +322,11 @@ export const ParentalControlProvider = ({ children }) => {
     return used < limit
   }, [isChild, parentalSettings, childProfile])
 
-  const requiresApproval = useCallback(() => {
+  const requiresApproval = useCallback((movie) => {
     if (!isChild || !parentalSettings) return false
+    if (movie && isMovieApproved(movie)) return false
     return Boolean(parentalSettings.require_approval)
-  }, [isChild, parentalSettings])
+  }, [isChild, parentalSettings, isMovieApproved])
 
   const value = useMemo(() => ({
     familyGroup,
@@ -304,6 +345,8 @@ export const ParentalControlProvider = ({ children }) => {
     updateParentalSettings: (settings) => updateSettingsMutation.mutateAsync(settings),
     updateChildProfile: (childUserId, updates) => updateChildProfileMutation.mutateAsync({ childUserId, updates }),
     refreshFamilyData: () => queryClient.invalidateQueries({ queryKey: ['familyMembership'] }),
+    incrementWatchTime: (minutes) => incrementWatchTimeMutation.mutateAsync(minutes),
+    isMovieApproved,
   }), [
     familyGroup, parentalSettings, childProfile, familyMembers, 
     isParent, isChild, isLoading, isContentAllowed, 

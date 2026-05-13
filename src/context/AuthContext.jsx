@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
+    // Initial session check — only this gates the loading spinner
     supabase.auth.getSession()
       .then(async ({ data: { session: s }, error }) => {
         if (error) {
@@ -52,15 +53,16 @@ export const AuthProvider = ({ children }) => {
         } else if (s?.user) {
           setUser(s.user);
           setSession(s);
-          fetchProfile(s.user.id).catch(() => {});
+          await fetchProfile(s.user.id).catch(() => {});
           fetchOnboarding(s.user.id);
         }
-        setLoading(false);
+        if (isMounted) setLoading(false);
       })
       .catch(() => {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       });
 
+    // Subsequent auth changes (login/logout) — update state without touching loading
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (s?.user) {
         setUser(s.user);
@@ -75,7 +77,6 @@ export const AuthProvider = ({ children }) => {
         setProfile(null);
         setNeedsOnboarding(false);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -89,7 +90,7 @@ export const AuthProvider = ({ children }) => {
       email,
       password,
       options: {
-        data: { username, full_name: fullName },
+        data: { username, full_name: fullName || null },
       },
     });
     if (error) throw error;
@@ -99,7 +100,7 @@ export const AuthProvider = ({ children }) => {
         await supabase.from('profiles').upsert({
           id: data.user.id,
           username,
-          full_name: fullName,
+          full_name: fullName || null,
         });
       } catch (profileError) {
         console.error('Profile creation error:', profileError);
@@ -151,12 +152,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Sign out error:', error);
     }
-    localStorage.clear();
-    sessionStorage.clear();
     setUser(null);
     setProfile(null);
     setSession(null);
     setNeedsOnboarding(false);
+    setLoading(false);
   };
 
   const updateProfile = async (updates) => {

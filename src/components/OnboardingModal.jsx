@@ -30,7 +30,7 @@ export default function OnboardingModal({ onClose, isFirstTime = true }) {
   const [step, setStep] = useState(0);
   const [age, setAge] = useState('');
   const [isAdult, setIsAdult] = useState(true);
-  const [selectedGenres, setSelectedGenres] = useState([]);
+  const [selectedGenres, setSelectedGenres] = useState(['sci-fi']);
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [saving, setSaving] = useState(false);
 

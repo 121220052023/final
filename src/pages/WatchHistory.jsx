@@ -58,7 +58,7 @@ export default function WatchHistory() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, queryClient]);
+  }, [user?.id, session?.access_token, queryClient]);
 
   const clearMutation = useMutation({
     mutationFn: async () => {
@@ -127,7 +127,7 @@ export default function WatchHistory() {
               Your viewing history, rebuilt as a usable library.
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-8 text-muted-foreground">
-              Use this page to resume unfinished titles, inspect what you actually spent time on, and feed the For You page with better personal signals.
+              Use this page to explore unfinished titles, inspect what you actually spent time on, and feed the For You page with better personal signals.
             </p>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -191,7 +191,7 @@ export default function WatchHistory() {
             <Clock3 className="mx-auto h-16 w-16 text-primary" />
             <h2 className="display-font mt-6 text-3xl font-bold text-foreground">No watch history yet</h2>
             <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-muted-foreground">
-              Start watching movies or series and they will appear here with progress, dates, and a resume path.
+              Start exploring movies or series and they will appear here with metadata, dates, and a path back to their details.
             </p>
           </section>
         ) : (
@@ -223,13 +223,24 @@ export default function WatchHistory() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => navigate(`/watch/${extractBaseId(item.movie_id)}`, { state: { type: item.movie_type } })}
-                      className="btn-primary px-5 py-2.5 text-sm"
-                    >
-                      <Play className="h-4 w-4 fill-white" />
-                      Resume
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info('Watch feature is temporarily disabled for fixes');
+                        }}
+                        className="btn-secondary px-5 py-2.5 text-sm"
+                      >
+                        <Play className="h-4 w-4" />
+                        Watch
+                      </button>
+                      <button
+                        onClick={() => navigate(`/movie/${extractBaseId(item.movie_id)}`, { state: { type: item.movie_type } })}
+                        className="btn-primary px-5 py-2.5 text-sm whitespace-nowrap"
+                      >
+                        Details
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-5">

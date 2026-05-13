@@ -3,9 +3,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Bot, Play, Send, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAIAssistantResponse } from '../services/aiService';
+import { useParentalControls } from '../context/ParentalControlContext';
 
 export default function AIAssistant() {
   const navigate = useNavigate();
+  const { isContentAllowed, isChild } = useParentalControls();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -31,12 +33,18 @@ export default function AIAssistant() {
 
     try {
       const response = await getAIAssistantResponse(userMessage, messages);
+      
+      let filteredMovies = response.movies || [];
+      if (isChild) {
+        filteredMovies = filteredMovies.filter(movie => isContentAllowed(movie));
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           content: response.text || response,
-          movies: response.movies || [],
+          movies: filteredMovies,
         },
       ]);
     } catch (error) {

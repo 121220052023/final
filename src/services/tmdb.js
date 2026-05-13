@@ -8,6 +8,7 @@ const makeRequest = async (endpoint, params = {}) => {
     const response = await axios.get(`${TMDB_BASE_URL}${endpoint}`, {
       params: {
         api_key: TMDB_API_KEY,
+        include_adult: true,
         ...params,
       },
       headers: {
@@ -94,6 +95,9 @@ export const tmdbApi = {
   },
   getTVRecommendations: async (tvId) => {
     return makeRequest(`/tv/${tvId}/recommendations`, { language: 'en-US' });
+  },
+  getExternalIds: async (id, type = 'movie') => {
+    return makeRequest(`/${type}/${id}/external_ids`, { language: 'en-US' });
   },
 
   // ===== ARABIC & RAMADAN =====

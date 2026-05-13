@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock3, Heart, MinusCircle, PlusCircle, TrendingUp } from 'lucide-react';
+import { Clock3, Heart, Info, MinusCircle, Play, PlusCircle, TrendingUp } from 'lucide-react';
 import { tmdbApi } from '../services/tmdb';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
@@ -60,7 +60,7 @@ export default function Trending() {
     return () => { cancelled = true; };
   }, [timeWindow, page]);
 
-  const normalizedMovies = trendingMovies.map(normalizeMovie);
+  const normalizedMovies = trendingMovies;
   const featured = normalizedMovies[0];
 
   const isInWatchlist = (id) => watchlist.some((movie) => movie.imdbID === id);
@@ -178,6 +178,25 @@ export default function Trending() {
                       <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72">
                         {featured.Plot}
                       </p>
+                      <div className="mt-6 flex gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast.info('Watch feature is temporarily disabled for fixes');
+                          }}
+                          className="btn-primary px-6 py-2.5"
+                        >
+                          <Play className="h-4 w-4" />
+                          Watch Now
+                        </button>
+                        <button
+                          onClick={() => navigate(`/movie/${featured.imdbID}`)}
+                          className="btn-secondary px-6 py-2.5"
+                        >
+                          <Info className="h-4 w-4" />
+                          Details
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -221,6 +240,24 @@ export default function Trending() {
                       </h3>
                       <p className="mt-1 text-xs text-muted-foreground">{movie.Year} • {movie.rating?.toFixed(1) || 'N/A'} rating</p>
                       <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{movie.Plot}</p>
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast.info('Watch feature is temporarily disabled for fixes');
+                          }}
+                          className="btn-secondary flex-1 justify-center py-2 text-xs"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Watch
+                        </button>
+                        <button
+                          onClick={() => navigate(`/movie/${movie.imdbID}`)}
+                          className="btn-primary flex-1 justify-center py-2 text-xs whitespace-nowrap"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </div>
                   </button>
                 ))}

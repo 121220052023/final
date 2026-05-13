@@ -131,60 +131,6 @@ export const likedMoviesService = {
   },
 }
 
-export const watchHistoryService = {
-  get: async (userId, token, limit = 20) => {
-    if (!userId || !token) return []
-    const url = `${SUPABASE_URL}/rest/v1/watch_history?select=*&user_id=eq.${encodeURIComponent(userId)}&order=watched_at.desc&limit=${limit}`
-    const response = await fetch(url, { headers: authHeaders(token) })
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`watchHistoryService.get failed: ${response.status} - ${err}`)
-    }
-    return await response.json()
-  },
-
-  addOrUpdate: async (movie, userId, token, progress = 0, lastPosition = 0, genre = null) => {
-    if (!userId || !token) throw new Error('Not authenticated')
-    const movieType = movie.type || movie.Type || 'movie'
-    const movieId = movie.id?.toString() || movie.imdbID?.toString()
-    const existing = await findLibraryRow('watch_history', movieId, movieType, userId, token)
-    const existingTime = existing?.last_position || 0
-    const totalPosition = existingTime + lastPosition
-    const estimatedDuration = movieType === 'tv' ? 2700 : 7200
-    const accumulatedProgress = (totalPosition / estimatedDuration) * 100
-    const totalProgress = Math.min(Math.max(progress, accumulatedProgress), 100)
-    const row = {
-      user_id: userId,
-      movie_id: movieId,
-      movie_type: movieType,
-      title: movie.title || movie.Title,
-      poster_url: movie.poster_url || (movie.poster_path
-        ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-        : (movie.Poster && movie.Poster !== 'N/A' ? movie.Poster : null)),
-      genre: genre || movie.genre || movie.Genre || null,
-      progress: totalProgress,
-      last_position: totalPosition,
-      completed: totalProgress >= 95,
-      watched_at: new Date().toISOString(),
-    }
-
-    return saveLibraryRow('watch_history', row, token)
-  },
-
-  remove: async (movieId, userId, token) => {
-    if (!userId || !token) throw new Error('Not authenticated')
-    const url = `${SUPABASE_URL}/rest/v1/watch_history?user_id=eq.${encode(userId)}&movie_id=eq.${encode(movieId)}`
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: authHeaders(token),
-    })
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`watchHistoryService.remove failed: ${response.status} - ${err}`)
-    }
-  },
-}
-
 export const notificationService = {
   get: async (userId, token) => {
     if (!userId || !token) return []

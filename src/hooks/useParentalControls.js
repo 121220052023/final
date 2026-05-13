@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react'
+
 import { useParentalControls } from '../context/ParentalControlContext'
 
 export const useParentalAccess = () => {
   const { user, isContentAllowed, isBedtime, hasWatchTimeRemaining, requiresApproval } = useParentalControls()
-  const [isBlocked, setIsBlocked] = useState(false)
-  const [blockReason, setBlockReason] = useState('')
 
   const checkContentAccess = (movie) => {
     if (!user) return { allowed: true }
@@ -28,5 +26,5 @@ export const useParentalAccess = () => {
     return { allowed: true }
   }
 
-  return { checkContentAccess, isBlocked, blockReason }
+  return { checkContentAccess }
 }

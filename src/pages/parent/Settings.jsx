@@ -4,10 +4,10 @@ import { Shield, Clock, Ban, Eye, Save, Loader2, AlertTriangle } from 'lucide-re
 import { useParentalControls } from '../../context/ParentalControlContext'
 
 const RATINGS = ['G', 'PG', 'PG-13', 'R', 'NC-17']
-const GENRES = ['Action', 'Horror', 'Thriller', 'Drama', 'Comedy', 'Romance', 'Sci-Fi', 'Fantasy', 'Animation', 'Documentary', 'Crime', 'Mystery', 'War', 'Western', 'Adult']
+const GENRES = ['Action', 'Horror', 'Thriller', 'Drama', 'Comedy', 'Romance', 'Sci-Fi', 'Fantasy', 'Animation', 'Documentary', 'Crime', 'Mystery', 'War', 'Western']
 
 const ParentSettings = () => {
-  const { parentalSettings, updateParentalSettings, familyGroup, familyMembers, updateChildProfile } = useParentalControls()
+  const { parentalSettings, updateParentalSettings, familyMembers, updateChildProfile } = useParentalControls()
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState({
     max_rating: parentalSettings?.max_rating || 'PG-13',
@@ -173,18 +173,7 @@ const ParentSettings = () => {
                   className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
                 />
               </label>
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Block Adult Content</p>
-                  <p className="text-xs text-muted-foreground">Automatically block NC-17 and adult-rated content</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.block_adult_content}
-                  onChange={(e) => setSettings(prev => ({ ...prev, block_adult_content: e.target.checked }))}
-                  className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                />
-              </label>
+              {/* Adult content toggle removed as per discovery catalog policy */}
             </div>
           </motion.div>
 

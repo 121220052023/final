@@ -39,30 +39,23 @@ const Profile = () => {
     const saved = localStorage.getItem('playbackSettings');
     return saved ? JSON.parse(saved) : {
       autoplayTrailers: true,
-      showAdultContent: false,
     };
   });
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-      setTheme(savedTheme);
-    }
-  }, [setTheme]);
+  // Theme is managed by next-themes (localStorage) — no need to read it manually here
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const data = await settingsService.get();
         if (data) {
-          if (data.theme) setTheme(data.theme);
+          // Don't override theme from DB — next-themes handles theme persistence via localStorage
           if (data.age) setUserAge(data.age);
           setPlaybackSettings(prev => ({
             ...prev,
             autoplayTrailers: data.autoplay_trailers ?? prev.autoplayTrailers,
-            showAdultContent: data.show_adult_content ?? prev.showAdultContent,
           }));
           setNotifications(prev => ({
             ...prev,
@@ -101,7 +94,6 @@ const Profile = () => {
     if (user && settingsLoaded) {
       settingsService.upsert({
         autoplay_trailers: playbackSettings.autoplayTrailers,
-        show_adult_content: playbackSettings.showAdultContent,
       }).catch(() => {});
     }
   }, [playbackSettings, user, settingsLoaded]);
@@ -114,7 +106,7 @@ const Profile = () => {
 
   useEffect(() => {
     if (userProfile || user) {
-      const name = userProfile?.full_name || userProfile?.username || user?.email?.split('@')[0] || '';
+      const name = userProfile?.full_name || userProfile?.username || user?.email?.split('@')[0] || 'User';
       const email = userProfile?.email || user?.email || '';
       setLocalProfile({ name, email, avatar: userProfile?.avatar_url || '' });
       setOriginalName(name);
@@ -334,7 +326,7 @@ const Profile = () => {
                               if (e.key === 'Enter') handleNameSave();
                               if (e.key === 'Escape') handleNameCancel();
                             }}
-                            className="flex-1 px-4 py-3 rounded-xl bg-background text-foreground border border-border focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+                            className="text-input flex-1"
                             placeholder="Enter your name"
                             autoFocus
                           />
@@ -380,14 +372,7 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {user?.user_metadata?.username && (
-                      <div>
-                        <label className="block text-sm font-semibold text-foreground mb-2">Username</label>
-                        <div className="px-4 py-3 rounded-xl bg-background border border-border text-foreground">
-                          @{user.user_metadata.username}
-                        </div>
-                      </div>
-                     )}
+
                    </div>
 
                    <div className="pt-6 border-t border-border">
@@ -455,20 +440,7 @@ const Profile = () => {
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-background hover:bg-accent transition-all border border-border">
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-1">Show Adult Content</h4>
-                      <p className="text-sm text-muted-foreground">Include adult content in search results</p>
-                    </div>
-                    <button
-                      onClick={() => handlePlaybackToggle('showAdultContent')}
-                      className={`w-12 h-6 rounded-full flex items-center px-1 transition-all ${
-                         playbackSettings.showAdultContent ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-muted'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${playbackSettings.showAdultContent ? 'transform translate-x-5' : ''}`}></div>
-                    </button>
-                  </div>
+
                 </div>
               </div>
             )}

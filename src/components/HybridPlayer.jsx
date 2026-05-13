@@ -17,7 +17,7 @@ const LoadingOverlay = ({ text = 'Connecting to stream…' }) => (
 );
 
 // ── Blocked / error fallback UI ───────────────────────────────────────────────
-const BlockedOverlay = ({ url, title, onRetry }) => (
+const BlockedOverlay = ({ url, onRetry }) => (
   <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/95 text-white p-8 text-center">
     <div className="text-6xl mb-4">📡</div>
     <p className="text-lg font-bold mb-2">Stream Blocked in Browser</p>

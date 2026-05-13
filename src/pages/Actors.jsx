@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Search, Star, Film, Award } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 const Actors = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedActor, setSelectedActor] = useState(null);
-  const navigate = useNavigate();
 
   // Popular actors data (you can replace this with real API data)
   const popularActors = [
@@ -93,7 +90,7 @@ const Actors = () => {
                           <span className="text-sm font-bold">{actor.movies} Movies</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                           <span className="text-sm font-bold">{actor.rating}</span>
                         </div>
                       </div>
@@ -112,7 +109,7 @@ const Actors = () => {
                       <span>Top Rated</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                       <span className="font-bold">{actor.rating}</span>
                     </div>
                   </div>

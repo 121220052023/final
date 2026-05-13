@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Clock3, Heart, Play, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, MessageSquare, Heart, Bookmark, Sparkles, Play } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useWatchlist } from '../context/WatchlistContext';
 import { GENRE_MAP, getMoviesByGenre, getTrendingMovies } from '../services/imdbService';
-import { watchHistoryService } from '../services/supabaseService';
+import { reviewService } from '../services/reviewService';
 import { tmdbApi } from '../services/tmdb';
 import { settingsService } from '../services/settingsService';
 import {
@@ -31,7 +32,7 @@ const genreToId = Object.entries(GENRE_MAP).reduce((accumulator, [key, value]) =
 const extractBaseId = (value) => value?.toString()?.replace(/-S\d+E\d+$/, '');
 const ITEMS_PER_PAGE = 8;
 
-function ShelfPoster({ item, caption, onOpen, onWatch }) {
+function ShelfPoster({ item, caption, onOpen }) {
   return (
     <article className="movie-card overflow-hidden rounded-[1.4rem]">
       <button onClick={() => onOpen(item)} className="group block w-full text-left">
@@ -52,13 +53,22 @@ function ShelfPoster({ item, caption, onOpen, onWatch }) {
             {caption || `${getPrimaryGenre(item)} • ${getYear(item)}`}
           </p>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            {getTypeLabel(item)}
-          </span>
-          <button onClick={() => onWatch(item)} className="btn-secondary px-4 py-2 text-sm">
-            <Play className="h-4 w-4 fill-current" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.info('Watch feature is temporarily disabled for fixes');
+            }}
+            className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
+          >
+            <Play className="h-4 w-4" />
             Watch
+          </button>
+          <button
+            onClick={() => onOpen(item)}
+            className="btn-primary flex-1 justify-center px-4 py-2 text-sm whitespace-nowrap"
+          >
+            Details
           </button>
         </div>
       </div>
@@ -68,7 +78,7 @@ function ShelfPoster({ item, caption, onOpen, onWatch }) {
 
 export default function ForYou() {
   const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const { likedMovies } = useLikedMovies();
   const { watchlist } = useWatchlist();
 
@@ -86,20 +96,29 @@ export default function ForYou() {
     enabled: !!user,
   });
 
-  // 2. Fetch History
-  const { data: history = [] } = useQuery({
-    queryKey: ['watchHistory', user?.id, 36],
-    queryFn: () => watchHistoryService.get(user.id, session.access_token, 36),
-    enabled: !!user && !!session,
+  // 2. Fetch User Reviews (Engagement signal)
+  const { data: userReviewsData } = useQuery({
+    queryKey: ['userReviews', user?.id],
+    queryFn: () => reviewService.getUserReviews(user.id, 1, 30),
+    enabled: !!user,
   });
+
+  const userReviews = userReviewsData?.reviews || [];
 
   // Derived Taste Logic
   const tasteProfile = useMemo(() => {
-    const tasteInput = [...history, ...likedMovies, ...watchlist];
-    const historyGenres = deriveTopGenres(tasteInput, 3);
-    const combined = [...new Set([...(userPrefs.genres || []), ...historyGenres])];
-    return combined.length ? combined.slice(0, 5) : ['Discovery', 'Character stories', 'Late-night picks'];
-  }, [history, likedMovies, watchlist, userPrefs]);
+    // Treat reviews as high-intent engagement signals
+    const reviewedMovies = userReviews.map(r => ({
+      ...r,
+      id: r.movie_id,
+      type: r.movie_type || 'movie'
+    }));
+    
+    const tasteInput = [...reviewedMovies, ...likedMovies, ...watchlist];
+    const engagementGenres = deriveTopGenres(tasteInput, 3);
+    const combined = [...new Set([...(userPrefs.genres || []), ...engagementGenres])];
+    return combined.length ? combined.slice(0, 5) : ['Discovery', 'Curated picks', 'Community favorites'];
+  }, [userReviews, likedMovies, watchlist, userPrefs]);
 
   const mappedGenres = useMemo(() => {
     return tasteProfile
@@ -107,9 +126,9 @@ export default function ForYou() {
       .filter(Boolean);
   }, [tasteProfile]);
 
-  const anchor = history?.[0];
-  const anchorId = extractBaseId(anchor?.movie_id);
-  const anchorType = anchor?.movie_type === 'tv' ? 'tv' : 'movie';
+  const anchor = userReviews?.[0] || likedMovies?.[0] || watchlist?.[0];
+  const anchorId = extractBaseId(anchor?.movie_id || anchor?.id || anchor?.imdbID);
+  const anchorType = (anchor?.movie_type || anchor?.Type || anchor?.type) === 'tv' ? 'tv' : 'movie';
 
   // 3. Shelf Queries
   const { data: movieShelf = [], isLoading: isMovieLoading } = useQuery({
@@ -154,13 +173,7 @@ export default function ForYou() {
     navigate(`/movie/${id}`, { state: { type: item.Type || item.type || 'movie' } });
   };
 
-  const watchMovie = (item) => {
-    const id = getMediaId(item);
-    if (!id) return;
-    navigate(`/watch/${id}`, { state: { type: item.Type || item.type || 'movie' } });
-  };
-
-  const continueWatching = history.slice(0, 4);
+  const recentEngagement = userReviews.slice(0, 4);
 
   if (isLoading && !heroItem) {
     return (
@@ -181,10 +194,10 @@ export default function ForYou() {
                 <div className="relative z-10">
                   <div className="section-label">For you</div>
                   <h1 className="display-font mt-3 max-w-3xl text-5xl font-bold leading-[0.92] md:text-6xl xl:text-7xl">
-                    Recommendations shaped by what you actually watch.
+                    Discovery engine shaped by your engagement.
                   </h1>
                   <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground">
-                    This page reads your preferences, watch history, likes, and watchlist to build shelves of movies and series that match your real taste.
+                    Your personal catalog is built from your ratings, reviews, likes, and watchlist to find movies and series that match your curation style.
                   </p>
                 </div>
 
@@ -199,15 +212,15 @@ export default function ForYou() {
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="stat-tile">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">History items</div>
-                      <div className="mt-2 text-3xl font-bold text-foreground">{history.length}</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Reviews</div>
+                      <div className="mt-2 text-3xl font-bold text-foreground">{userReviews.length}</div>
                     </div>
                     <div className="stat-tile">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Liked</div>
                       <div className="mt-2 text-3xl font-bold text-foreground">{likedMovies.length}</div>
                     </div>
                     <div className="stat-tile">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Watch later</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Watchlist</div>
                       <div className="mt-2 text-3xl font-bold text-foreground">{watchlist.length}</div>
                     </div>
                   </div>
@@ -226,12 +239,12 @@ export default function ForYou() {
           </div>
 
           <div className="editorial-panel rounded-[2rem] p-6 sm:p-8">
-            <div className="section-label">Your taste profile</div>
+            <div className="section-label">Your Discovery Profile</div>
             <div className="mt-5 space-y-4">
               {[
-                { icon: Clock3, label: 'Continue watching', value: `${continueWatching.length} items active` },
-                { icon: Heart, label: 'Preferred genres', value: tasteProfile.slice(0, 3).join(' • ') || 'Set your preferences' },
-                { icon: Sparkles, label: 'Content types', value: userPrefs.types.length ? userPrefs.types.join(', ') : 'Movies & Series' },
+                { icon: MessageSquare, label: 'Recent Reviews', value: `${userReviews.length} shared insights` },
+                { icon: Heart, label: 'Taste Preferences', value: tasteProfile.slice(0, 3).join(' • ') || 'Set your preferences' },
+                { icon: Sparkles, label: 'Media Selection', value: userPrefs.types.length ? userPrefs.types.join(', ') : 'Movies & Series' },
               ].map((item) => (
                 <div key={item.label} className="rounded-[1.3rem] border border-border bg-muted/50 p-4">
                   <div className="flex items-start gap-3">
@@ -247,24 +260,24 @@ export default function ForYou() {
           </div>
         </section>
 
-        {continueWatching.length > 0 ? (
+        {recentEngagement.length > 0 ? (
           <section>
             <div className="section-title mb-6">
               <div>
-                <div className="section-label">Continue watching</div>
-                <h2 className="section-heading mt-2">Keep moving through the titles you already opened</h2>
+                <div className="section-label">Recently Reviewed</div>
+                <h2 className="section-heading mt-2">Titles you've contributed to the community</h2>
               </div>
-              <button onClick={() => navigate('/history')} className="btn-quiet">
-                Full history
+              <button onClick={() => navigate('/dashboard')} className="btn-quiet">
+                My Dashboard
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              {continueWatching.map((item) => (
+              {recentEngagement.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => watchMovie({ imdbID: extractBaseId(item.movie_id), Type: item.movie_type })}
+                  onClick={() => openMovie({ imdbID: item.movie_id, Type: item.movie_type })}
                   className="list-row flex items-center gap-4 p-4 text-left"
                 >
                   <img
@@ -274,14 +287,16 @@ export default function ForYou() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="display-font truncate text-xl font-bold text-foreground">{item.title}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      {item.movie_type === 'tv' ? 'Series' : 'Movie'} • {Math.round(item.progress || 0)}% watched
+                    <div className="mt-1 text-sm text-muted-foreground flex items-center gap-2">
+                      {item.movie_type === 'tv' ? 'Series' : 'Movie'} • Reviewed on {new Date(item.created_at).toLocaleDateString()}
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.min(item.progress || 0, 100)}%` }}
-                      />
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex text-amber-500">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Sparkles key={i} className={`h-3 w-3 ${i < item.rating ? 'fill-current' : 'opacity-20'}`} />
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold text-foreground">{item.rating}/5</span>
                     </div>
                   </div>
                 </button>
@@ -293,13 +308,13 @@ export default function ForYou() {
         <section>
           <div className="section-title mb-6">
             <div>
-              <div className="section-label">Because you watched</div>
-              <h2 className="section-heading mt-2">Closest matches to your recent viewing lane</h2>
+              <div className="section-label">Because of your reviews</div>
+              <h2 className="section-heading mt-2">Closest matches based on your rated titles</h2>
             </div>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {recommendationShelf.slice(0, 4).map((item) => (
-              <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+              <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} />
             ))}
           </div>
         </section>
@@ -314,7 +329,7 @@ export default function ForYou() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {movieShelf.map((item) => (
-                <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+                <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} />
               ))}
             </div>
           </section>
@@ -335,7 +350,6 @@ export default function ForYou() {
                   item={item}
                   caption={`${getGenreList(item).slice(0, 2).join(' • ') || getPrimaryGenre(item)} • ${getTypeLabel(item)}`}
                   onOpen={openMovie}
-                  onWatch={watchMovie}
                 />
               ))}
             </div>

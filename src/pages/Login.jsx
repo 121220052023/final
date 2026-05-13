@@ -15,7 +15,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signIn, signInWithGoogle, signInWithGitHub } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (event) => {
@@ -124,20 +124,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">or continue with</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={signInWithGoogle} className="btn-secondary justify-center py-3">
-              Google
-            </button>
-            <button onClick={signInWithGitHub} className="btn-secondary justify-center py-3">
-              GitHub
-            </button>
-          </div>
 
           <p className="mt-6 text-sm text-muted-foreground">
             Don&apos;t have an account?{' '}

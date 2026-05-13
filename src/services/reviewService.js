@@ -142,4 +142,23 @@ export const reviewService = {
     const average = data.reduce((sum, r) => sum + r.rating, 0) / data.length;
     return { average: Math.round(average * 10) / 10, count: data.length };
   },
+
+  getUserReviews: async (userId, page = 1, limit = 10) => {
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await supabase
+      .from('reviews')
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      console.warn('getUserReviews:', error.message);
+      return { reviews: [], total: 0 };
+    }
+
+    return { reviews: data || [], total: count || 0 };
+  },
 };

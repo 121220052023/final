@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import Hls from 'hls.js';
 import { Play, Pause, Volume2, VolumeX, Maximize2, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
 
-const StreamPlayer = ({ channel, onError }) => {
+const StreamPlayer = ({ channel }) => {
     const videoRef = useRef(null);
     const hlsRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -41,7 +41,7 @@ const StreamPlayer = ({ channel, onError }) => {
         }
 
         setIsLoading(false);
-    }, [channel]);
+    }, [channel, initHlsPlayer, initTsPlayer]);
 
     const initHlsPlayer = () => {
         if (!Hls.isSupported()) {
@@ -67,7 +67,7 @@ const StreamPlayer = ({ channel, onError }) => {
         hls.loadSource(channel.url);
         hls.attachMedia(videoRef.current);
 
-        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
             setIsLoading(false);
             setHasVideo(true);
             videoRef.current?.play().then(() => {

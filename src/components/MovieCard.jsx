@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Info, Sparkles, Heart, PlusCircle, MinusCircle, Star, Monitor } from 'lucide-react';
+import { Info, Sparkles, Heart, PlusCircle, MinusCircle, Star, Monitor, Play } from 'lucide-react';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useAuth } from '../context/AuthContext';
@@ -21,11 +21,6 @@ const MovieCard = ({ movie, onAISummary = () => {} }) => {
 
   const handleMoreInfo = () => {
     navigate(`/movie/${movieId}`, { state: { type: movie.Type || movie.media_type } });
-  };
-
-  const handleWatchNow = (e) => {
-    e.stopPropagation();
-    navigate(`/watch/${movieId}`, { state: { type: movie.Type || movie.media_type } });
   };
 
   const handleAISummary = (e) => {
@@ -120,31 +115,35 @@ const MovieCard = ({ movie, onAISummary = () => {} }) => {
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-gradient-to-t from-black via-black/90 to-black/60 flex flex-col items-center justify-center gap-3 p-4"
             >
-              <motion.button
-                onClick={handleWatchNow}
-                className="flex items-center gap-2 w-full justify-center text-white font-bold px-4 py-3 rounded-xl glass-immersive"
-                style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)' }}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.05 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Monitor className="w-5 h-5" />
-                Watch Now
-              </motion.button>
-              <motion.button
-                onClick={handleMoreInfo}
-                className="btn-primary flex items-center gap-2 w-full justify-center glass-immersive"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Info className="w-5 h-5" />
-                More Info
-              </motion.button>
+              <div className="flex w-full gap-2">
+                <motion.button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toast.info('Watch feature is temporarily disabled for fixes');
+                  }}
+                  className="btn-primary flex-1 flex items-center gap-2 justify-center glass-immersive text-xs px-2 py-2"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Play className="w-4 h-4" />
+                  Watch
+                </motion.button>
+                <motion.button
+                  onClick={handleMoreInfo}
+                  className="btn-secondary flex-1 flex items-center gap-2 justify-center glass-immersive text-xs px-2 py-2"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.12 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Info className="w-4 h-4" />
+                  Details
+                </motion.button>
+              </div>
               <motion.button
                 onClick={handleAISummary}
                 className="btn-primary flex items-center gap-2 w-full justify-center glass-immersive"
@@ -180,8 +179,8 @@ const MovieCard = ({ movie, onAISummary = () => {} }) => {
           <p className="text-purple-500 text-sm font-semibold">{yearText}</p>
           {(movie.rating || movie.vote_average) && (
             <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              <span className="text-yellow-500 font-bold text-sm">
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <span className="text-yellow-400 font-bold text-sm">
                 {typeof (movie.rating || movie.vote_average) === 'number'
                   ? (movie.rating || movie.vote_average).toFixed(1)
                   : (movie.rating || movie.vote_average)}

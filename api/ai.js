@@ -1,3 +1,5 @@
+/* eslint-disable no-undef */
+
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export default async function handler(req, res) {

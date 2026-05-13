@@ -9,6 +9,69 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>Ocean of Movies — Discover & Watch Movies</title>
+    <script>
+      // CRITICAL: Block all new windows/tabs BEFORE anything else loads
+      (function() {
+        // Override window.open at the earliest possible time
+        window.open = function() { return null; };
+        window.showModalDialog = function() { return null; };
+        
+        // Trap all target="_blank" attempts
+        document.addEventListener('click', function(e) {
+          try {
+            // Block modifier keys (Ctrl+Click, etc)
+            if (e.ctrlKey || e.metaKey || e.shiftKey) {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }
+            
+            // Block _blank targets
+            let el = e.target;
+            while (el && el !== document) {
+              if (el.target === '_blank' || el.getAttribute && el.getAttribute('target') === '_blank') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+              el = el.parentElement;
+            }
+          } catch(e) {}
+        }, true);
+        
+        // Block middle-click (opens in new tab)
+        document.addEventListener('mousedown', function(e) {
+          if (e.button === 1) { // Middle mouse button
+            e.preventDefault();
+            return false;
+          }
+        }, true);
+        
+        // Block context menu
+        document.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          return false;
+        }, true);
+        
+        // Block all window.location changes to external sites
+        const originalReplace = window.location.replace;
+        const originalAssign = window.location.assign;
+        window.location.replace = function(url) {
+          if (typeof url === 'string' && (url.includes('http') || url.includes('//'))) {
+            console.log('Navigation blocked:', url);
+            return;
+          }
+          return originalReplace.call(window.location, url);
+        };
+        window.location.assign = function(url) {
+          if (typeof url === 'string' && (url.includes('http') || url.includes('//'))) {
+            console.log('Navigation blocked:', url);
+            return;
+          }
+          return originalAssign.call(window.location, url);
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

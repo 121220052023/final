@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -15,7 +15,7 @@ const ArabicMovies = () => {
     const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
     const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
 
-    const { data, isLoading, isError, error } = useQuery({
+    const { data, isLoading } = useQuery({
         queryKey: ['arabicContent', category, searchQuery, page],
         queryFn: async () => {
             if (searchQuery.trim()) {
@@ -333,8 +333,8 @@ const ArabicMovies = () => {
                                     <div className="p-4 relative z-20 bg-gradient-to-t from-card to-surface">
                                         <div className="flex items-center gap-2 mb-1">
                                             {item.vote_average > 0 && (
-                                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                                                    <Star className="w-3 h-3 fill-amber-400" />
+                                                <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded">
+                                                    <Star className="w-3 h-3 fill-yellow-400" />
                                                     {item.vote_average?.toFixed(1)}
                                                 </span>
                                             )}

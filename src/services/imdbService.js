@@ -13,6 +13,7 @@ const makeRequest = async (endpoint, params = {}, page = 1) => {
       params: {
         api_key: TMDB_API_KEY,
         page,
+        include_adult: true,
         ...params,
       },
       headers: {
@@ -143,34 +144,40 @@ export const getTrendingMovies = async (page = 1) => {
 // Get movie or TV show details by ID
 export const getMovieDetails = async (id, paramType = null) => {
   try {
-    let details, credits;
+    let details, credits, externalIds;
     let type = paramType || 'movie';
 
     if (type === 'tv') {
-      [details, credits] = await Promise.all([
+      [details, credits, externalIds] = await Promise.all([
         makeRequest(`/tv/${id}`, { language: 'en-US' }),
         makeRequest(`/tv/${id}/credits`, { language: 'en-US' }),
+        makeRequest(`/tv/${id}/external_ids`, { language: 'en-US' }),
       ]);
     } else {
       // Try as movie first, then fallback to tv
       try {
-        [details, credits] = await Promise.all([
+        [details, credits, externalIds] = await Promise.all([
           makeRequest(`/movie/${id}`, { language: 'en-US' }),
           makeRequest(`/movie/${id}/credits`, { language: 'en-US' }),
+          makeRequest(`/movie/${id}/external_ids`, { language: 'en-US' }),
         ]);
         type = 'movie'; // confirm it worked as movie
-      } catch (error) {
-        [details, credits] = await Promise.all([
+      } catch {
+        [details, credits, externalIds] = await Promise.all([
           makeRequest(`/tv/${id}`, { language: 'en-US' }),
           makeRequest(`/tv/${id}/credits`, { language: 'en-US' }),
+          makeRequest(`/tv/${id}/external_ids`, { language: 'en-US' }),
         ]);
         type = 'tv';
       }
     }
 
+    const imdb_id = externalIds?.imdb_id || details?.imdb_id || null;
+
     return {
       id: details.id.toString(),
-      title: details.title || details.name,
+      imdbID: imdb_id || details.id.toString(), // Use real IMDb ID if available
+      tmdbID: details.id.toString(),
       year: (details.release_date || details.first_air_date) ? (details.release_date || details.first_air_date).split('-')[0] : 'N/A',
       rated: details.adult ? 'R' : 'PG-13',
       released: details.release_date || details.first_air_date || 'N/A',

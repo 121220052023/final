@@ -7,23 +7,20 @@ import { parentalService } from '../../services/parentalService'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const ParentDashboard = () => {
-  const { familyGroup, familyMembers, parentalSettings, childProfile, isParent } = useParentalControls()
+  const { familyGroup, familyMembers, parentalSettings, childProfile } = useParentalControls()
   const [pendingRequests, setPendingRequests] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [requests, activity, notifs] = await Promise.all([
+        const [requests, activity] = await Promise.all([
           parentalService.getWatchRequests('pending'),
           parentalService.getActivityLogs(familyGroup?.id, 10),
-          parentalService.getNotifications(),
         ])
         setPendingRequests(requests)
         setRecentActivity(activity)
-        setNotifications(notifs)
       } catch (error) {
         console.error('Error loading dashboard data:', error)
       } finally {
@@ -35,7 +32,7 @@ const ParentDashboard = () => {
   }, [familyGroup])
 
   const children = familyMembers.filter(m => m.role === 'child')
-  const totalWatchTime = children.reduce((sum, child) => sum + (childProfile?.time_used_today || 0), 0)
+  const totalWatchTime = children.reduce((sum) => sum + (childProfile?.time_used_today || 0), 0)
 
   const watchTimeData = [
     { day: 'Mon', minutes: 45 },

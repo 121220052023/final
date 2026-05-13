@@ -19,7 +19,6 @@ import { ParentalControlProvider } from './context/ParentalControlContext';
 import { NotificationsProvider } from './context/NotificationsContext';
 
 const ForYou = lazy(() => import('./pages/ForYou'));
-const WatchMovie = lazy(() => import('./pages/WatchMovie'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
@@ -29,12 +28,8 @@ const Browse = lazy(() => import('./pages/Browse'));
 const Trending = lazy(() => import('./pages/Trending'));
 const SearchResults = lazy(() => import('./pages/SearchResults'));
 const Profile = lazy(() => import('./pages/Profile'));
-const WatchHistory = lazy(() => import('./pages/WatchHistory'));
 const Actors = lazy(() => import('./pages/Actors'));
 const TVShows = lazy(() => import('./pages/TVShows'));
-const ArabicMovies = lazy(() => import('./pages/ArabicMovies'));
-const LiveTV = lazy(() => import('./pages/LiveTV'));
-const LiveScores = lazy(() => import('./pages/LiveScores'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -109,21 +104,16 @@ function AppRoutes() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/movie/:id" element={<MovieDetails />} />
-          <Route path="/watch/:id" element={<ProtectedRoute><WatchMovie /></ProtectedRoute>} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/trending" element={<Trending />} />
           <Route path="/actors" element={<Actors />} />
           <Route path="/tv-shows" element={<TVShows />} />
-          <Route path="/arabic" element={<ArabicMovies />} />
-          <Route path="/live-tv" element={<LiveTV />} />
-          <Route path="/live-scores" element={<LiveScores />} />
           <Route path="/search" element={<SearchResults />} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>} />
-          <Route path="/history" element={<ProtectedRoute><WatchHistory /></ProtectedRoute>} />
           <Route path="/liked-movies" element={<ProtectedRoute><LikedMovies /></ProtectedRoute>} />
           <Route path="/books" element={<Books />} />
           <Route path="/book/:id" element={<BookDetails />} />
@@ -151,6 +141,49 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  // Block new tabs and popups globally
+  useEffect(() => {
+    // Override window.open
+    const originalOpen = window.open;
+    window.open = function() {
+      return null;
+    };
+
+    // Block all suspicious links and navigation
+    const handleClick = (e) => {
+      // Block Ctrl+Click, Cmd+Click, Shift+Click (new tab attempts)
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      
+      // Block links targeting _blank
+      const target = e.target.closest('a');
+      if (target && (target.target === '_blank' || target.getAttribute('target') === '_blank')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+    
+    // Block right-click context menu
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener('click', handleClick, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+
+    // Cleanup on unmount
+    return () => {
+      window.open = originalOpen;
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -162,6 +195,7 @@ function App() {
                   <Router>
                     <OnboardingGate>
                       <ScrollToTop />
+                      {/* Adult content toggle removed as per discovery catalog policy */}
                       <div className="min-h-screen flex flex-col">
                         <Navbar />
                         <main className="flex-1">

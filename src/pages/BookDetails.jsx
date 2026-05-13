@@ -125,7 +125,7 @@ const BookDetails = () => {
               </div>
               {book.averageRating > 0 && (
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
                   <span>{book.averageRating.toFixed(1)} ({book.ratingsCount} ratings)</span>
                 </div>
               )}

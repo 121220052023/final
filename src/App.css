@@ -66,8 +66,8 @@
   --page-max: 1480px;
   --page-max-wide: 1720px;
 
-  --app-background: #f8f9fa;
-  --app-foreground: #1a1c1e;
+  --app-background: #ffffff;
+  --app-foreground: #000000;
   --app-surface: #ffffff;
   --app-surface-dim: #f1f3f5;
   --app-surface-bright: #ffffff;
@@ -77,8 +77,8 @@
   --app-surface-container-high: #e9ecef;
   --app-surface-container-highest: #dee2e6;
   --app-surface-variant: #f1f3f5;
-  --app-on-surface: #1a1c1e;
-  --app-on-surface-variant: #44474e;
+  --app-on-surface: #000000;
+  --app-on-surface-variant: #303133;
 
   --app-primary: #d84527;
   --app-on-primary: #ffffff;
@@ -97,32 +97,33 @@
 
   --app-outline: #857370;
   --app-outline-variant: #d8c2be;
-  --app-card: rgba(255, 255, 255, 0.8);
-  --app-card-foreground: #1a1c1e;
+  --app-card: rgba(255, 255, 255, 0.9);
+  --app-card-foreground: #000000;
   --app-popover: #ffffff;
-  --app-popover-foreground: #1a1c1e;
-  --app-muted: rgba(26, 28, 30, 0.05);
-  --app-muted-foreground: #44474e;
-  --app-accent: rgba(216, 69, 39, 0.08);
-  --app-accent-foreground: #1a1c1e;
-  --app-border: rgba(26, 28, 30, 0.1);
-  --app-input: rgba(26, 28, 30, 0.1);
+  --app-popover-foreground: #000000;
+  --app-muted: rgba(0, 0, 0, 0.05);
+  --app-muted-foreground: #202124;
+  --app-accent: rgba(216, 69, 39, 0.1);
+  --app-accent-foreground: #000000;
+  --app-border: rgba(0, 0, 0, 0.3);
+  --app-input: rgba(0, 0, 0, 0.3);
+  --app-rating: #facc15;
 }
 
 .dark {
-  --app-background: #090b0d;
-  --app-foreground: #f3ede4;
-  --app-surface: #111316;
-  --app-surface-dim: #0d0f11;
-  --app-surface-bright: #191c20;
-  --app-surface-container-lowest: #090b0d;
-  --app-surface-container-low: #101215;
-  --app-surface-container: #15181b;
-  --app-surface-container-high: #1b1f23;
-  --app-surface-container-highest: #24292f;
-  --app-surface-variant: #181c21;
-  --app-on-surface: #f3ede4;
-  --app-on-surface-variant: #a9a197;
+  --app-background: #000000;
+  --app-foreground: #ffffff;
+  --app-surface: #0a0a0a;
+  --app-surface-dim: #050505;
+  --app-surface-bright: #121212;
+  --app-surface-container-lowest: #000000;
+  --app-surface-container-low: #080808;
+  --app-surface-container: #0d0d0d;
+  --app-surface-container-high: #151515;
+  --app-surface-container-highest: #1a1a1a;
+  --app-surface-variant: #121212;
+  --app-on-surface: #ffffff;
+  --app-on-surface-variant: #d1d1d1;
 
   --app-primary: #ff5f3c;
   --app-on-primary: #ffffff;
@@ -139,18 +140,18 @@
   --app-tertiary-container: #143640;
   --app-on-tertiary-container: #e7f8fb;
 
-  --app-outline: rgba(243, 237, 228, 0.12);
-  --app-outline-variant: rgba(243, 237, 228, 0.06);
-  --app-card: rgba(18, 20, 23, 0.88);
-  --app-card-foreground: #f3ede4;
-  --app-popover: #14171a;
-  --app-popover-foreground: #f3ede4;
-  --app-muted: rgba(243, 237, 228, 0.06);
-  --app-muted-foreground: #aaa297;
-  --app-accent: rgba(255, 95, 60, 0.12);
-  --app-accent-foreground: #f3ede4;
-  --app-border: rgba(243, 237, 228, 0.08);
-  --app-input: rgba(243, 237, 228, 0.08);
+  --app-outline: rgba(255, 255, 255, 0.2);
+  --app-outline-variant: rgba(255, 255, 255, 0.1);
+  --app-card: rgba(10, 10, 10, 0.95);
+  --app-card-foreground: #ffffff;
+  --app-popover: #0d0d0d;
+  --app-popover-foreground: #ffffff;
+  --app-muted: rgba(255, 255, 255, 0.1);
+  --app-muted-foreground: #e8eaed;
+  --app-accent: rgba(255, 95, 60, 0.15);
+  --app-accent-foreground: #ffffff;
+  --app-border: rgba(255, 255, 255, 0.4);
+  --app-input: rgba(255, 255, 255, 0.4);
 }
 
 @layer base {
@@ -309,18 +310,32 @@
   }
 
   .text-input {
-    @apply w-full rounded-[1.1rem] border border-border bg-surface-container-high px-4 py-3.5 text-sm text-foreground transition-all duration-200;
+    @apply w-full rounded-[1.1rem] border-2 border-border px-4 py-3.5 text-sm text-foreground transition-all duration-200;
+    background-color: #f8f9fa;
+  }
+
+  .dark .text-input {
+    background-color: #1a1a1a;
   }
 
   .text-input::placeholder {
-    @apply text-muted-foreground;
+    color: var(--app-muted-foreground);
     opacity: 0.6;
+  }
+
+  .text-input:hover {
+    border-color: var(--app-primary);
   }
 
   .text-input:focus {
     @apply border-primary;
+    background-color: var(--app-surface);
     outline: none;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary) 15%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary) 12%, transparent);
+  }
+
+  .dark .text-input:focus {
+    background-color: #000000;
   }
 
   .text-input::selection {
@@ -401,4 +416,7 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--app-foreground) 26%, transparent);
+}
+.text-yellow-400 {
+  color: var(--app-rating);
 }

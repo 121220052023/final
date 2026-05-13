@@ -50,7 +50,7 @@ export default function Footer() {
             </p>
 
             <div className="flex items-center gap-3 text-muted-foreground">
-              <a href="mailto:contact@oceanofmovies.app" className="btn-secondary h-11 w-11 rounded-full p-0">
+              <a href="mailto:medora9990@gmail.com" className="btn-secondary h-11 w-11 rounded-full p-0">
                 <Mail className="h-4 w-4" />
               </a>
               <Link to="/liked-movies" className="btn-secondary h-11 w-11 rounded-full p-0">

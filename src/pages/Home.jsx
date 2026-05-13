@@ -12,6 +12,7 @@ import {
 } from '../services/imdbService';
 import { getSurpriseMovie } from '../services/aiService';
 import { useAuth } from '../context/AuthContext';
+import { useParentalControls } from '../context/ParentalControlContext';
 import {
   getBackdropUrl,
   getDisplayCopy,
@@ -76,18 +77,29 @@ function PosterCard({ item, badge, onOpen, onWatch }) {
           </div>
           {rating ? (
             <div className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground">
-              <Star className="h-4 w-4 fill-current text-secondary" />
+              <Star className="h-4 w-4 fill-current text-yellow-400" />
               {rating.toFixed(1)}
             </div>
           ) : null}
         </div>
         <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{getDisplayCopy(item)}</p>
         <div className="flex items-center gap-2">
-          <button onClick={() => onWatch(item)} className="btn-primary px-4 py-2 text-sm">
-            <Play className="h-4 w-4 fill-white" />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.info('Watch feature is temporarily disabled for fixes');
+            }}
+            className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
+          >
+            <Play className="h-4 w-4" />
             Watch
           </button>
-          <button onClick={() => onOpen(item)} className="btn-secondary px-4 py-2 text-sm">Details</button>
+          <button
+            onClick={() => onOpen(item)}
+            className="btn-primary flex-1 justify-center px-4 py-2 text-sm whitespace-nowrap"
+          >
+            Details
+          </button>
         </div>
       </div>
     </article>
@@ -127,13 +139,14 @@ export default function Home() {
   const [surprisePick, setSurprisePick] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isContentAllowed, isChild } = useParentalControls();
 
   useEffect(() => {
     let cancelled = false;
     const loadHome = async () => {
       setLoading(true);
       try {
-        const [heroData, curatedData, upcomingData] = await Promise.all([
+        const [heroRaw, curatedRaw, upcomingRaw] = await Promise.all([
           getPopularMoviesForSlider(),
           activeRegion !== 'all'
             ? searchMovies(activeRegion, 1, 'country')
@@ -143,9 +156,21 @@ export default function Home() {
           getUpcomingMovies(),
         ]);
         if (cancelled) return;
-        setHeroEntries((heroData || []).map(normalizeMediaItem));
-        setCuratedMovies((curatedData.movies || []).map(normalizeMediaItem));
-        setUpcomingMovies((upcomingData.movies || []).map(normalizeMediaItem));
+
+        // Apply parental filters if user is a child
+        let filteredHero = heroRaw || [];
+        let filteredCurated = curatedRaw.movies || [];
+        let filteredUpcoming = upcomingRaw.movies || [];
+
+        if (isChild) {
+          filteredHero = filteredHero.filter(m => isContentAllowed(m));
+          filteredCurated = filteredCurated.filter(m => isContentAllowed(m));
+          filteredUpcoming = filteredUpcoming.filter(m => isContentAllowed(m));
+        }
+
+        setHeroEntries(filteredHero.map(normalizeMediaItem));
+        setCuratedMovies(filteredCurated.map(normalizeMediaItem));
+        setUpcomingMovies(filteredUpcoming.map(normalizeMediaItem));
       } catch (error) {
         console.error('Error loading home page:', error);
         if (!cancelled) {
@@ -175,11 +200,7 @@ export default function Home() {
     navigate(`/movie/${id}`, { state: { type: movie.Type || movie.type || 'movie' } });
   };
 
-  const watchMovie = (movie) => {
-    const id = getMediaId(movie);
-    if (!id) return;
-    navigate(`/watch/${id}`, { state: { type: movie.Type || movie.type || 'movie' } });
-  };
+
 
   const handleSurpriseMe = async () => {
     if (!user) {
@@ -242,11 +263,16 @@ export default function Home() {
               </div>
               <div className="relative z-10 mt-10 space-y-6">
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={() => watchMovie(featuredMovie)} className="btn-primary px-6 py-3.5">
-                    <Play className="h-4 w-4 fill-white" />
-                    Play now
+                  <button
+                    onClick={() => {
+                      toast.info('Watch feature is temporarily disabled for fixes');
+                    }}
+                    className="btn-primary flex items-center gap-2 px-8 py-3.5"
+                  >
+                    <Play className="h-5 w-5 fill-current" />
+                    Watch Now
                   </button>
-                  <button onClick={() => openMovie(featuredMovie)} className="btn-secondary px-6 py-3.5">More details</button>
+                  <button onClick={() => openMovie(featuredMovie)} className="btn-secondary px-6 py-3.5">Details</button>
                   <button onClick={handleSurpriseMe} className="btn-secondary px-6 py-3.5">
                     {surpriseLoading ? <Sparkles className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
                     {surpriseLoading ? 'Finding one' : 'Surprise me'}
@@ -344,7 +370,6 @@ export default function Home() {
                 item={item}
                 badge={index === 0 ? 'Top pick' : index === 1 ? 'Fresh' : undefined}
                 onOpen={openMovie}
-                onWatch={watchMovie}
               />
             ))}
           </div>
@@ -356,9 +381,9 @@ export default function Home() {
           <div className="editorial-panel flex h-full flex-col justify-between rounded-[1.9rem] p-6 sm:p-8">
             <div>
               <div className="section-label">For you</div>
-              <h2 className="section-heading mt-3">A personal lane based on what you watched</h2>
+              <h2 className="section-heading mt-3">A personal lane based on your curation</h2>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">
-                The recommendation page reads your watch history, watchlist, and likes to build shelves around your real habits.
+                The recommendation page reads your reviews, ratings, watchlist, and likes to build shelves around your real habits.
               </p>
             </div>
             <div className="mt-8 space-y-4">
@@ -367,7 +392,7 @@ export default function Home() {
                   ? surprisePick
                     ? `Latest surprise detour: ${getDisplayTitle(surprisePick)}`
                     : 'Your personal lane is ready to use from the new navigation.'
-                  : 'Sign in to make the For You page learn from what you watch and save.'}
+                  : 'Sign in to make the For You page learn from your reviews and curation habits.'}
               </div>
               <button onClick={() => navigate('/for-you')} className="btn-primary w-full justify-between px-5 py-3.5">
                 Open For You
@@ -416,7 +441,7 @@ export default function Home() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {curatedMovies.slice(8, 16).map((item) => (
-                <PosterCard key={getMediaId(item)} item={item} onOpen={openMovie} onWatch={watchMovie} />
+                <PosterCard key={getMediaId(item)} item={item} onOpen={openMovie} />
               ))}
             </div>
           </section>

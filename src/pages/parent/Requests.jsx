@@ -1,10 +1,8 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Check, X, Clock, MessageSquare } from 'lucide-react'
-import { useParentalControls } from '../../context/ParentalControlContext'
+import { useAuth } from '../../context/AuthContext'
 import { parentalService } from '../../services/parentalService'
 
 const ParentRequests = () => {
+  const { user } = useAuth()
   const { familyGroup } = useParentalControls()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -15,7 +13,7 @@ const ParentRequests = () => {
   useEffect(() => {
     const loadRequests = async () => {
       try {
-        const data = await parentalService.getWatchRequests(filter)
+        const data = await parentalService.getWatchRequests(familyGroup.id, filter)
         setRequests(data)
       } catch (error) {
         console.error('Error loading requests:', error)
@@ -23,12 +21,12 @@ const ParentRequests = () => {
         setLoading(false)
       }
     }
-    if (familyGroup) loadRequests()
-  }, [familyGroup, filter])
+    if (familyGroup?.id) loadRequests()
+  }, [familyGroup?.id, filter])
 
   const handleReview = async (requestId, status) => {
     try {
-      await parentalService.reviewWatchRequest(requestId, status, message)
+      await parentalService.reviewWatchRequest(requestId, status, user.id, message)
       setRequests(prev => prev.filter(r => r.id !== requestId))
       setReviewingId(null)
       setMessage('')

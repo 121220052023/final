@@ -15,13 +15,19 @@ export const parentalService = {
     return data?.[0] || null
   },
 
-  getWatchRequests: async (groupId) => {
+  getWatchRequests: async (groupId, filter = 'all') => {
     if (!groupId) return []
-    const { data, error } = await supabase
+    let query = supabase
       .from('watch_requests')
       .select('*')
       .eq('group_id', groupId)
       .order('requested_at', { ascending: false })
+
+    if (filter !== 'all') {
+      query = query.eq('status', filter)
+    }
+
+    const { data, error } = await query
     if (error) throw error
     return data || []
   },

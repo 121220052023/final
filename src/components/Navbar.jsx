@@ -19,11 +19,7 @@ const utilityLinks = [
   { label: 'Trending', to: '/trending' },
   { label: 'Watchlist', to: '/watchlist' },
   { label: 'Liked', to: '/liked-movies' },
-  { label: 'History', to: '/history' },
-  { label: 'Arabic', to: '/arabic' },
   { label: 'Actors', to: '/actors' },
-  { label: 'Live TV', to: '/live-tv' },
-  { label: '⚽ Live Scores', to: '/live-scores' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'About', to: '/about' },
   { label: 'Contact', to: '/contact' },
@@ -63,12 +59,11 @@ export default function Navbar() {
   };
 
   const username = useMemo(() => {
-    if (!profile) return null;
     if (profile?.full_name) return profile.full_name;
     if (profile?.username) return profile.username;
     if (user?.email) return user.email.split('@')[0];
-    return 'Guest';
-  }, [profile?.full_name, profile?.username, user?.email]);
+    return 'User';
+  }, [profile, profile?.full_name, profile?.username, user?.email]);
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -84,6 +79,7 @@ export default function Navbar() {
     setIsOpen(false);
     setShowUtilityMenu(false);
     setShowNotifications(false);
+    navigate('/');
   };
 
   return (
@@ -126,7 +122,7 @@ export default function Navbar() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search movies..."
-                  className="h-9 w-48 lg:w-56 xl:w-64 rounded-xl border border-border bg-muted/50 pl-10 pr-4 text-sm font-medium transition-all focus:border-primary focus:bg-background focus:ring-4 focus:ring-primary/10 outline-none"
+                  className="text-input h-9 w-48 lg:w-56 xl:w-64 pl-10 pr-4 font-medium"
                   type="search"
                 />
               </form>
@@ -354,7 +350,7 @@ export default function Navbar() {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search movies, series, books..."
-                    className="text-input rounded-full pl-11 pr-4 py-3"
+                    className="text-input rounded-full pl-11 pr-4 py-3 text-foreground placeholder:text-muted-foreground/70"
                     type="search"
                   />
                 </div>

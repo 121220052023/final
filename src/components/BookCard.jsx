@@ -147,8 +147,8 @@ const BookCard = ({ book }) => {
           <p className="text-muted-foreground text-sm">{book.year}</p>
           {book.averageRating > 0 && (
             <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              <span className="text-yellow-500 font-bold text-sm">{book.averageRating.toFixed(1)}</span>
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <span className="text-yellow-400 font-bold text-sm">{book.averageRating.toFixed(1)}</span>
             </div>
           )}
         </div>

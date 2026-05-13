@@ -527,7 +527,7 @@ const LiveTV = () => {
               <ul className="text-sm text-muted-foreground space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">•</span>
-                  If a stream doesn't load, switch to <strong className="text-foreground">Server 2</strong> or <strong className="text-foreground">Server 3</strong>
+                  If a stream doesn&apos;t load, switch to <strong className="text-foreground">Server 2</strong> or <strong className="text-foreground">Server 3</strong>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">•</span>
