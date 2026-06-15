@@ -1,8 +1,21 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const ProtectedRoute = ({ children, requireParent = false }) => {
+const SuspendedBanner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="max-w-md text-center p-8 bg-destructive/10 rounded-xl border border-destructive/30">
+      <div className="text-4xl mb-4 font-bold text-destructive">!</div>
+      <h1 className="text-2xl font-bold text-destructive mb-2">Account Suspended</h1>
+      <p className="text-muted-foreground">
+        This account has been suspended by an administrator. If you believe this is an error, please contact support.
+      </p>
+    </div>
+  </div>
+)
+
+const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth()
+  const { pathname } = useLocation()
 
   if (loading) {
     return (
@@ -19,7 +32,20 @@ const ProtectedRoute = ({ children, requireParent = false }) => {
     return <Navigate to="/login" replace />
   }
 
-  if (requireParent && profile?.role !== 'parent') {
+  if (profile?.deleted_at || profile?.is_suspended) {
+    return <SuspendedBanner />
+  }
+
+  // Admin redirect should happen before checking other permissions
+  if (profile?.role === 'admin' && pathname === '/') {
+    return <Navigate to="/admin" replace />
+  }
+
+  if (requireParent && profile?.role !== 'parent' && profile?.role !== 'admin') {
+    return <Navigate to="/" replace />
+  }
+
+  if (requireAdmin && profile?.role !== 'admin') {
     return <Navigate to="/" replace />
   }
 
