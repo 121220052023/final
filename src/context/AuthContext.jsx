@@ -20,15 +20,24 @@ export const AuthProvider = ({ children }) => {
     let isMounted = true;
 
     const fetchProfile = async (userId) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (!error && data && isMounted) {
-        setProfile(data);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        if (error) {
+          console.error('Profile fetch error:', error);
+          // Set a minimal profile object if fetch fails, so loading doesn't hang
+          if (isMounted) setProfile({ id: userId });
+        } else if (data && isMounted) {
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error('Profile fetch exception:', err);
+        if (isMounted) setProfile({ id: userId });
       }
-      return data;
+      return null;
     };
 
     const fetchOnboarding = async (userId) => {

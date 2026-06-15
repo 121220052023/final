@@ -17,8 +17,8 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
   const { user, profile, loading } = useAuth()
   const { pathname } = useLocation()
 
-  // Wait for both loading AND profile to be available before making routing decisions
-  if (loading || !profile) {
+  // If loading, show spinner
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -29,8 +29,21 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
     )
   }
 
+  // If not logged in, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // If logged in but profile not loaded yet, this shouldn't happen but handle it
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm font-medium">Loading profile...</p>
+        </div>
+      </div>
+    )
   }
 
   if (profile?.deleted_at || profile?.is_suspended) {
