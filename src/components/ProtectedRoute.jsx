@@ -17,7 +17,8 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
   const { user, profile, loading } = useAuth()
   const { pathname } = useLocation()
 
-  if (loading) {
+  // Wait for both loading AND profile to be available before making routing decisions
+  if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
