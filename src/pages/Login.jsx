@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Lock, Mail, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Loader2, Mail, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const benefitList = [
   'Personal For You recommendations',
@@ -18,16 +19,50 @@ export default function Login() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
+  const getErrorMessage = (err) => {
+    const msg = err?.message || ''
+    if (msg.includes('Invalid login credentials')) return 'Incorrect email or password. Check your credentials.'
+    if (msg.includes('Email not confirmed')) return 'Verify your email before signing in. Check your inbox.'
+    if (msg.includes('Invalid email')) return 'Enter a valid email address.'
+    if (msg.includes('Too many requests')) return 'Too many attempts. Wait a moment and try again.'
+    if (msg.includes('rate_limit')) return 'Server is busy. Please wait a few seconds.'
+    if (msg.includes('network') || msg.includes('Network')) return 'Connection lost. Check your internet.'
+    if (msg.includes('timeout') || msg.includes('Timeout')) return 'Request timed out. Try again.'
+    if (msg.includes('suspended') || msg.includes('Suspended') || msg.includes('banned')) return 'Your account has been suspended. Contact support.'
+    return 'Failed to sign in. Check your credentials and try again.'
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError('');
 
+    if (!email.trim()) {
+      setError('Enter your email address.')
+      setLoading(false)
+      return
+    }
+
+    if (!password) {
+      setError('Enter your password.')
+      setLoading(false)
+      return
+    }
+
     try {
-      await signIn({ email, password });
-      navigate('/');
+      const { data } = await signIn({ email: email.trim(), password });
+      if (data?.user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+        if (profile?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
     } catch (err) {
-      setError(err.message || 'Failed to sign in');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -94,7 +129,6 @@ export default function Login() {
             <div>
               <label className="mb-2 block text-sm font-semibold text-foreground">Password</label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}

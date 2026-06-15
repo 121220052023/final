@@ -1,0 +1,1 @@
+SELECT * FROM public.child_profiles;

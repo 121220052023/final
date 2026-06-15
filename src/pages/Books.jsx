@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BookOpen, Compass, Library, Search, Sparkles, Star } from 'lucide-react';
 import { googleBooksApi } from '../services/googleBooks';
 import ContentFilter from '../components/ContentFilter';
+import { supabase } from '../lib/supabase';
 
 const sideLinks = [
   { id: 'trending', label: 'Home', icon: BookOpen },
@@ -58,16 +59,30 @@ export default function Books() {
     const loadBooks = async () => {
       setLoading(true);
       try {
-        const [trendingResult, bestsellersResult, newReleasesResult, arabicResult, sciFiResult] =
+        const [trendingResult, bestsellersResult, newReleasesResult, arabicResult, sciFiResult, localBooksResult] =
           await Promise.allSettled([
             googleBooksApi.getTrendingBooks(),
             googleBooksApi.getBestSellers(),
             googleBooksApi.getNewReleases(),
             googleBooksApi.getArabicBooks(),
             googleBooksApi.getBooksByCategory('Science Fiction'),
+            supabase.from('books').select('*').order('created_at', { ascending: false }).limit(20),
           ]);
 
         if (cancelled) return;
+
+        // Format local DB books
+        const localBooks = localBooksResult.status === 'fulfilled' && localBooksResult.value?.data
+          ? localBooksResult.value.data.map(b => ({
+              id: b.id,
+              title: b.title,
+              author: b.author || 'Unknown',
+              thumbnail: b.cover_url || '',
+              description: b.description || '',
+              categories: b.categories || [],
+              isLocal: true,
+            }))
+          : [];
 
         // Also load individual adaptation books
         const adaptationPromises = await Promise.allSettled([
@@ -77,7 +92,7 @@ export default function Books() {
           googleBooksApi.searchBooks('The Martian').then((r) => r.books[0]),
         ]);
 
-        const trending = trendingResult.status === 'fulfilled' ? trendingResult.value : [];
+        const trending = [...localBooks, ...(trendingResult.status === 'fulfilled' ? trendingResult.value : [])];
         const bestsellers = bestsellersResult.status === 'fulfilled' ? bestsellersResult.value : [];
         const newReleases = newReleasesResult.status === 'fulfilled' ? newReleasesResult.value : [];
         const arabic = arabicResult.status === 'fulfilled' ? arabicResult.value.books : [];

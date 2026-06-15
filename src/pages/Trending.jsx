@@ -182,7 +182,7 @@ export default function Trending() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toast.info('Watch feature is temporarily disabled for fixes');
+                            navigate(`/movie/${featured.imdbID}`, { state: { type: featured.type || 'movie', autoplay: true } });
                           }}
                           className="btn-primary px-6 py-2.5"
                         >
@@ -244,7 +244,7 @@ export default function Trending() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toast.info('Watch feature is temporarily disabled for fixes');
+                            navigate(`/movie/${movie.imdbID}`, { state: { type: movie.type || 'movie', autoplay: true } });
                           }}
                           className="btn-secondary flex-1 justify-center py-2 text-xs"
                         >

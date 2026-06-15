@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Lock, Mail, User, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, User, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function Signup() {
   const [username, setUsername] = useState('');
@@ -14,20 +15,69 @@ export default function Signup() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
+  const getErrorMessage = (err) => {
+    const msg = err?.message || ''
+    if (msg.includes('already registered') || msg.includes('already exists')) return 'An account with this email already exists. Sign in instead.'
+    if (msg.includes('Invalid email')) return 'Enter a valid email address.'
+    if (msg.includes('Password should be at least 6 characters')) return 'Password must be at least 6 characters.'
+    if (msg.includes('rate_limit') || msg.includes('Too many')) return 'Too many attempts. Wait a moment.'
+    if (msg.includes('network') || msg.includes('Network')) return 'Connection lost. Check your internet.'
+    if (msg.includes('username') && msg.includes('already')) return 'This username is taken. Choose another.'
+    return 'Failed to create account. Check your details and try again.'
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError('');
 
+    if (!email.trim()) {
+      setError('Enter your email address.')
+      setLoading(false)
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid email address.')
+      setLoading(false)
+      return
+    }
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      setLoading(false)
+      return
+    }
+    if (!username.trim()) {
+      setError('Choose a username.')
+      setLoading(false)
+      return
+    }
+    if (username.length < 3) {
+      setError('Username must be at least 3 characters.')
+      setLoading(false)
+      return
+    }
+    if (!/^[a-zA-Z]/.test(username)) {
+      setError('Username must start with a letter.')
+      setLoading(false)
+      return
+    }
+
     try {
-      const data = await signUp({ email, password, username });
+      const data = await signUp({ email: email.trim(), password, username: username.trim() });
       if (data?.user && !data?.session) {
         setSuccess(true);
+      } else if (data?.user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+        if (profile?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
       } else {
         navigate('/');
       }
     } catch (err) {
-      setError(err.message || 'Failed to create account');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -107,7 +157,6 @@ export default function Signup() {
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground">Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}

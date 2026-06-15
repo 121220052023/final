@@ -44,9 +44,11 @@ const convertMovie = (movie) => {
     poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
     overview: movie.overview || 'No plot available',
     genre: movie.genre_ids?.join(', ') || 'N/A',
+    genre_ids: movie.genre_ids || [],
     type: type,
     rating: movie.vote_average,
     backdrop: movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : null,
+    adult: movie.adult || false,
     // Legacy fields for backward compatibility
     imdbID: movie.id.toString(),
     Title: movie.title || movie.name,

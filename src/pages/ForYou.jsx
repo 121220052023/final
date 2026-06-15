@@ -32,7 +32,7 @@ const genreToId = Object.entries(GENRE_MAP).reduce((accumulator, [key, value]) =
 const extractBaseId = (value) => value?.toString()?.replace(/-S\d+E\d+$/, '');
 const ITEMS_PER_PAGE = 8;
 
-function ShelfPoster({ item, caption, onOpen }) {
+function ShelfPoster({ item, caption, onOpen, onWatch }) {
   return (
     <article className="movie-card overflow-hidden rounded-[1.4rem]">
       <button onClick={() => onOpen(item)} className="group block w-full text-left">
@@ -57,7 +57,7 @@ function ShelfPoster({ item, caption, onOpen }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              toast.info('Watch feature is temporarily disabled for fixes');
+              onWatch(item);
             }}
             className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
           >
@@ -314,7 +314,14 @@ export default function ForYou() {
           </div>
           <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {recommendationShelf.slice(0, 4).map((item) => (
-              <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} />
+              <ShelfPoster
+                key={getMediaId(item)}
+                item={item}
+                onOpen={openMovie}
+                onWatch={(movieItem) => {
+                  navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
+                }}
+              />
             ))}
           </div>
         </section>
@@ -329,7 +336,14 @@ export default function ForYou() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {movieShelf.map((item) => (
-                <ShelfPoster key={getMediaId(item)} item={item} onOpen={openMovie} />
+                <ShelfPoster
+                  key={getMediaId(item)}
+                  item={item}
+                  onOpen={openMovie}
+                  onWatch={(movieItem) => {
+                    navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
+                  }}
+                />
               ))}
             </div>
           </section>
@@ -350,6 +364,9 @@ export default function ForYou() {
                   item={item}
                   caption={`${getGenreList(item).slice(0, 2).join(' • ') || getPrimaryGenre(item)} • ${getTypeLabel(item)}`}
                   onOpen={openMovie}
+                  onWatch={(movieItem) => {
+                    navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
+                  }}
                 />
               ))}
             </div>

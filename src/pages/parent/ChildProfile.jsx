@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Shield, Clock, Ban, Save, Loader2, User } from 'lucide-react'
+import { ArrowLeft, Shield, Clock, Ban, Save, Loader2, User, Lock, Unlock } from 'lucide-react'
 import { useParentalControls } from '../../context/ParentalControlContext'
 import { parentalService } from '../../services/parentalService'
+import { supabase } from '../../lib/supabase'
+import { toast } from 'sonner'
 
 const RATINGS = ['G', 'PG', 'PG-13', 'R', 'NC-17']
 const GENRES = ['Action', 'Horror', 'Thriller', 'Drama', 'Comedy', 'Romance', 'Sci-Fi', 'Fantasy', 'Animation', 'Documentary', 'Crime', 'Mystery']
@@ -21,22 +23,44 @@ const ChildProfile = () => {
     custom_bedtime_start: '',
     custom_bedtime_end: '',
     pin: '',
+    max_watch_count: -1,
   })
   const [activityLogs, setActivityLogs] = useState([])
   const [watchRequests, setWatchRequests] = useState([])
+
+  const [childProfileData, setChildProfileData] = useState(null)
+  const [accountLocked, setAccountLocked] = useState(false)
+  const [togglingLock, setTogglingLock] = useState(false)
 
   useEffect(() => {
     const loadData = async () => {
       if (!familyGroup || !userId) return
       try {
-        const [logs, requests] = await Promise.all([
-          parentalService.getActivityLogs(familyGroup.id, 20),
-          parentalService.getWatchRequests('all'),
+        const [logs, requests, profile] = await Promise.all([
+          parentalService.getActivityLogs(familyGroup.id),
+          parentalService.getWatchRequests(familyGroup.id, 'all'),
+          supabase.from('child_profiles').select('*').eq('user_id', userId).eq('family_group_id', familyGroup.id).maybeSingle()
         ])
         setActivityLogs(logs.filter(l => l.user_id === userId))
         setWatchRequests(requests.filter(r => r.child_user_id === userId))
+        if (profile.data) {
+          setChildProfileData(profile.data)
+          setAccountLocked(profile.data.account_locked || false)
+          setChildData({
+            custom_max_rating: profile.data.custom_max_rating || '',
+            custom_blocked_genres: profile.data.custom_blocked_genres || [],
+            custom_daily_limit_minutes: profile.data.custom_daily_limit_minutes?.toString() || '',
+            custom_bedtime_start: profile.data.custom_bedtime_start || '',
+            custom_bedtime_end: profile.data.custom_bedtime_end || '',
+            pin: profile.data.pin || '',
+            max_watch_count: profile.data.max_watch_count ?? -1,
+          })
+        }
       } catch (error) {
-        console.error('Error loading child data:', error)
+        console.error('Error loading child data:', error?.message || error)
+        if (error?.details) console.error('Details:', error.details)
+        if (error?.hint) console.error('Hint:', error.hint)
+        if (error?.code) console.error('Code:', error.code)
       } finally {
         setLoading(false)
       }
@@ -57,11 +81,40 @@ const ChildProfile = () => {
         custom_bedtime_start: childData.custom_bedtime_start || null,
         custom_bedtime_end: childData.custom_bedtime_end || null,
         pin: childData.pin || null,
+        max_watch_count: childData.max_watch_count !== '' ? parseInt(childData.max_watch_count) : -1,
       })
+      toast.success('Child settings saved')
     } catch (error) {
-      console.error('Error saving child profile:', error)
+      console.error('Error saving child profile:', error?.message || error)
+      if (error?.details) console.error('Details:', error.details)
+      if (error?.hint) console.error('Hint:', error.hint)
+      if (error?.code) console.error('Code:', error.code)
+      toast.error('Failed to save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleToggleLock = async () => {
+    setTogglingLock(true)
+    try {
+      const newLocked = !accountLocked
+      const { error } = await supabase
+        .from('child_profiles')
+        .upsert({
+          family_group_id: familyGroup.id,
+          user_id: userId,
+          account_locked: newLocked,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'family_group_id,user_id' })
+      if (error) throw error
+      setAccountLocked(newLocked)
+      toast.success(newLocked ? 'Account locked' : 'Account unlocked')
+    } catch (error) {
+      console.error('Error toggling lock:', error?.message || error)
+      toast.error('Failed to update lock status')
+    } finally {
+      setTogglingLock(false)
     }
   }
 
@@ -83,7 +136,7 @@ const ChildProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-24 pb-12">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <button
           onClick={() => navigate(-1)}
@@ -99,7 +152,21 @@ const ChildProfile = () => {
               <User className="w-8 h-8 text-purple-500" />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-foreground">{childProfile?.username || 'Child Profile'}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-black text-foreground">{childProfile?.username || 'Child Profile'}</h1>
+                <button
+                  onClick={handleToggleLock}
+                  disabled={togglingLock}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    accountLocked
+                      ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {togglingLock ? <Loader2 className="w-4 h-4 animate-spin" /> : accountLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  {accountLocked ? 'Locked' : 'Lock Account'}
+                </button>
+              </div>
               <p className="text-muted-foreground mt-1">Manage settings and monitor activity</p>
             </div>
           </div>
@@ -165,7 +232,7 @@ const ChildProfile = () => {
               <Clock className="w-5 h-5 text-blue-500" />
               Custom Time Limits
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Daily Limit (minutes)</label>
                 <input
@@ -193,6 +260,17 @@ const ChildProfile = () => {
                   value={childData.custom_bedtime_end}
                   onChange={(e) => setChildData(prev => ({ ...prev, custom_bedtime_end: e.target.value }))}
                   className="w-full p-3 bg-background rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Max Videos (-1 = unlimited)</label>
+                <input
+                  type="number"
+                  value={childData.max_watch_count}
+                  onChange={(e) => setChildData(prev => ({ ...prev, max_watch_count: e.target.value }))}
+                  className="w-full p-3 bg-background rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-foreground"
+                  placeholder="-1 = Unlimited"
+                  min={-1}
                 />
               </div>
             </div>

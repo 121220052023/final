@@ -58,14 +58,14 @@ export const parentalService = {
     return data
   },
 
-  getActivityLogs: async (groupId) => {
+  getActivityLogs: async (groupId, limit = 100) => {
     if (!groupId) return []
     const { data, error } = await supabase
       .from('activity_logs')
       .select('*')
       .eq('group_id', groupId)
       .order('created_at', { ascending: false })
-      .limit(100)
+      .limit(limit)
     if (error) throw error
     return data || []
   },

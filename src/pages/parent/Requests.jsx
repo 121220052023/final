@@ -1,4 +1,8 @@
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { Check, X, Clock, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useParentalControls } from '../../context/ParentalControlContext'
 import { parentalService } from '../../services/parentalService'
 
 const ParentRequests = () => {
@@ -38,13 +42,13 @@ const ParentRequests = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-12 h-12 -500 -transparent rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-24 pb-12">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
           <h1 className="text-3xl font-black text-foreground">Watch Requests</h1>

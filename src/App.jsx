@@ -192,6 +192,8 @@ function ChildRestrictions() {
 
 function AppLayout() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { profile, loading } = useAuth();
   const isAuthPage = useMemo(() =>
     ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname),
   [pathname]);
@@ -201,6 +203,13 @@ function AppLayout() {
     const ctx = useParentalControls();
     if (ctx?.isChild) isChildUser = true;
   } catch {}
+
+  // Redirect admin users to /admin when they try to access home
+  useEffect(() => {
+    if (!loading && profile?.role === 'admin' && pathname === '/') {
+      navigate('/admin', { replace: true });
+    }
+  }, [loading, profile?.role, pathname, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col">

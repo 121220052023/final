@@ -100,6 +100,10 @@ export const tmdbApi = {
     return makeRequest(`/${type}/${id}/external_ids`, { language: 'en-US' });
   },
 
+  getWatchProviders: async (id, type = 'movie') => {
+    return makeRequest(`/${type}/${id}/watch/providers`, { language: 'en-US' });
+  },
+
   // ===== ARABIC & RAMADAN =====
   getArabicMovies: async (page = 1) => {
     return makeRequest('/discover/movie', {

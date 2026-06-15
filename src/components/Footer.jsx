@@ -1,7 +1,8 @@
-import { ArrowUp, Heart, Mail, Sparkles } from 'lucide-react';
+import { ArrowUp, Heart, Mail, Sparkles, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const footerColumns = [
   {
@@ -31,6 +32,7 @@ const footerColumns = [
 ];
 
 export default function Footer() {
+  const { isAdmin } = useAuth();
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -53,16 +55,24 @@ export default function Footer() {
               <a href="mailto:medora9990@gmail.com" className="btn-secondary h-11 w-11 rounded-full p-0">
                 <Mail className="h-4 w-4" />
               </a>
-              <Link to="/liked-movies" className="btn-secondary h-11 w-11 rounded-full p-0">
-                <Heart className="h-4 w-4" />
-              </Link>
-              <Link to="/for-you" className="btn-secondary h-11 w-11 rounded-full p-0">
-                <Sparkles className="h-4 w-4" />
-              </Link>
+              {isAdmin ? (
+                <Link to="/admin" className="btn-secondary h-11 w-11 rounded-full p-0">
+                  <Shield className="h-4 w-4" />
+                </Link>
+              ) : (
+                <>
+                  <Link to="/liked-movies" className="btn-secondary h-11 w-11 rounded-full p-0">
+                    <Heart className="h-4 w-4" />
+                  </Link>
+                  <Link to="/for-you" className="btn-secondary h-11 w-11 rounded-full p-0">
+                    <Sparkles className="h-4 w-4" />
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
-          {footerColumns.map((column) => (
+          {!isAdmin && footerColumns.map((column) => (
             <div key={column.title}>
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
                 {column.title}

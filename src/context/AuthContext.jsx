@@ -101,6 +101,7 @@ export const AuthProvider = ({ children }) => {
           id: data.user.id,
           username,
           full_name: fullName || null,
+          email: data.user.email,
         });
       } catch (profileError) {
         console.error('Profile creation error:', profileError);
@@ -193,12 +194,15 @@ export const AuthProvider = ({ children }) => {
     setNeedsOnboarding(false);
   };
 
+  const isAdmin = profile?.role === 'admin';
+
   const value = {
     user,
     session,
     profile,
     loading,
     needsOnboarding,
+    isAdmin,
     signUp,
     signIn,
     resetPassword,

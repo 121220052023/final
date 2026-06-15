@@ -275,7 +275,7 @@ export default function SearchResults() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toast.info('Watch feature is temporarily disabled for fixes');
+                            navigate(`/movie/${featured.id}`, { state: { type: featured.type, autoplay: true } });
                           }}
                           className="btn-primary flex items-center gap-2"
                         >

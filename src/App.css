@@ -310,17 +310,28 @@
   }
 
   .text-input {
-    @apply w-full rounded-[1.1rem] border-2 border-border px-4 py-3.5 text-sm text-foreground transition-all duration-200;
-    background-color: #f8f9fa;
+    @apply w-full rounded-[1.1rem] border-2 px-4 py-3.5 text-sm transition-all duration-200;
+    background-color: #ffffff !important;
+    border-color: #d1d5db;
+    color: #000000 !important;
+    font-weight: 700;
   }
 
   .dark .text-input {
-    background-color: #1a1a1a;
+    background-color: #000000 !important;
+    border-color: #404040;
+    color: #ffffff !important;
+    font-weight: 700;
   }
 
   .text-input::placeholder {
-    color: var(--app-muted-foreground);
-    opacity: 0.6;
+    color: #9ca3af;
+    font-weight: 400;
+  }
+
+  .dark .text-input::placeholder {
+    color: #6b7280;
+    font-weight: 400;
   }
 
   .text-input:hover {
@@ -328,8 +339,8 @@
   }
 
   .text-input:focus {
-    @apply border-primary;
-    background-color: var(--app-surface);
+    border-color: var(--app-primary);
+    background-color: #ffffff;
     outline: none;
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-primary) 12%, transparent);
   }
@@ -419,4 +430,25 @@
 }
 .text-yellow-400 {
   color: var(--app-rating);
+}
+
+/* Hide browser-native password reveal (Chrome, Edge, etc.) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+input[type="password"]::-webkit-textfield-decoration-container {
+  display: none;
+}
+
+input[type="password"]::-webkit-inner-spin-button {
+  display: none;
 }

@@ -37,11 +37,6 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
     return <SuspendedBanner />
   }
 
-  // Admin redirect should happen before checking other permissions
-  if (profile?.role === 'admin' && pathname === '/') {
-    return <Navigate to="/admin" replace />
-  }
-
   if (requireParent && profile?.role !== 'parent' && profile?.role !== 'admin') {
     return <Navigate to="/" replace />
   }

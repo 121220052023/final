@@ -2,16 +2,21 @@ import { useParentalControls } from '../context/ParentalControlContext'
 import RestrictedOverlay from './RestrictedOverlay'
 
 const ContentFilter = ({ children, movie, fallback }) => {
-  const { isContentAllowed, isBedtime, hasWatchTimeRemaining, isChild, requiresApproval } = useParentalControls()
+  const { isContentAllowed, isBedtime, hasWatchTimeRemaining, isChild, requiresApproval, hasReachedWatchLimit } = useParentalControls()
 
   if (!isChild) return children
 
-  // 1. Check Bedtime
+  // 1. Check Watch Limit (max videos)
+  if (hasReachedWatchLimit()) {
+    return fallback || <RestrictedOverlay movie={movie} reason="limit" />
+  }
+
+  // 2. Check Bedtime
   if (isBedtime()) {
     return fallback || <RestrictedOverlay movie={movie} reason="bedtime" />
   }
 
-  // 2. Check Watch Time
+  // 3. Check Watch Time
   if (!hasWatchTimeRemaining()) {
     return fallback || <RestrictedOverlay movie={movie} reason="limit" />
   }

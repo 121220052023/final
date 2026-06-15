@@ -32,7 +32,6 @@ const genreFilters = [
   { id: 'drama', label: 'Drama' },
   { id: 'thriller', label: 'Thriller' },
   { id: 'sci-fi', label: 'Sci-Fi' },
-  { id: 'romance', label: 'Romance' },
 ];
 
 const regionFilters = [
@@ -87,7 +86,7 @@ function PosterCard({ item, badge, onOpen, onWatch }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              toast.info('Watch feature is temporarily disabled for fixes');
+              onWatch(item);
             }}
             className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
           >
@@ -157,10 +156,19 @@ export default function Home() {
         ]);
         if (cancelled) return;
 
-        // Apply parental filters if user is a child
-        let filteredHero = heroRaw || [];
-        let filteredCurated = curatedRaw.movies || [];
-        let filteredUpcoming = upcomingRaw.movies || [];
+        // Filter out mature/adult content from home page
+        const isNotMature = (m) => {
+          if (m?.adult) return false
+          const rated = (m?.Rated || m?.rated || '').toUpperCase()
+          if (rated === 'NC-17' || rated === 'X' || rated === 'XXX') return false
+          const genreIds = m?.genre_ids || m?.genreIds || []
+          if (genreIds.includes(10749)) return false
+          return true
+        }
+
+        let filteredHero = (heroRaw || []).filter(isNotMature);
+        let filteredCurated = (curatedRaw.movies || []).filter(isNotMature);
+        let filteredUpcoming = (upcomingRaw.movies || []).filter(isNotMature);
 
         if (isChild) {
           filteredHero = filteredHero.filter(m => isContentAllowed(m));
@@ -265,7 +273,9 @@ export default function Home() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => {
-                      toast.info('Watch feature is temporarily disabled for fixes');
+                      if (featuredMovie) {
+                        navigate(`/movie/${getMediaId(featuredMovie)}`, { state: { type: featuredMovie.Type || featuredMovie.type || 'movie', autoplay: true } });
+                      }
                     }}
                     className="btn-primary flex items-center gap-2 px-8 py-3.5"
                   >
@@ -370,6 +380,9 @@ export default function Home() {
                 item={item}
                 badge={index === 0 ? 'Top pick' : index === 1 ? 'Fresh' : undefined}
                 onOpen={openMovie}
+                onWatch={(movieItem) => {
+                  navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
+                }}
               />
             ))}
           </div>
@@ -441,7 +454,14 @@ export default function Home() {
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {curatedMovies.slice(8, 16).map((item) => (
-                <PosterCard key={getMediaId(item)} item={item} onOpen={openMovie} />
+                <PosterCard
+                  key={getMediaId(item)}
+                  item={item}
+                  onOpen={openMovie}
+                  onWatch={(movieItem) => {
+                    navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
+                  }}
+                />
               ))}
             </div>
           </section>

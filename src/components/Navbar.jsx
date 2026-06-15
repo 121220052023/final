@@ -15,6 +15,13 @@ const primaryLinks = [
   { label: 'Books', to: '/books' },
 ];
 
+const adminLinks = [
+  { label: 'Dashboard', to: '/admin' },
+  { label: 'Content', to: '/admin/content' },
+  { label: 'Reports', to: '/admin/reports' },
+  { label: 'Settings', to: '/admin/settings' },
+];
+
 const utilityLinks = [
   { label: 'Trending', to: '/trending' },
   { label: 'Watchlist', to: '/watchlist' },
@@ -32,8 +39,9 @@ export default function Navbar() {
   const [query, setQuery] = useState('');
   const [showUtilityMenu, setShowUtilityMenu] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
-  const { user, profile, session, signOut } = useAuth();
-  const { isParent } = useParentalControls();
+  const { user, profile, session, signOut, isAdmin } = useAuth();
+  const { isParent: isFamilyParent } = useParentalControls();
+  const isParent = isFamilyParent || profile?.role === 'parent';
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
@@ -58,12 +66,13 @@ export default function Navbar() {
     }
   };
 
-  const username = useMemo(() => {
+  const displayName = useMemo(() => {
     if (profile?.full_name) return profile.full_name;
     if (profile?.username) return profile.username;
-    if (user?.email) return user.email.split('@')[0];
-    return 'User';
-  }, [profile, profile?.full_name, profile?.username, user?.email]);
+    return null;
+  }, [profile, profile?.full_name, profile?.username]);
+
+  const links = isAdmin ? adminLinks : primaryLinks;
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -97,10 +106,11 @@ export default function Navbar() {
               </Link>
 
               <div className="hidden items-center gap-1 xl:flex">
-                {primaryLinks.map((link) => (
+                {links.map((link) => (
                   <NavLink 
                     key={link.to} 
                     to={link.to} 
+                    end={link.to === '/admin' || link.to === '/'}
                     className={({ isActive }) => 
                       `px-4 py-2 text-sm font-bold rounded-lg transition-all ${
                         isActive 
@@ -148,8 +158,9 @@ export default function Navbar() {
                 </button>
               </div>
 
+              {!isAdmin && (
               <div
-                className="relative"
+                className="relative hidden xl:block"
                 onMouseEnter={() => setShowUtilityMenu(true)}
                 onMouseLeave={() => setShowUtilityMenu(false)}
               >
@@ -185,11 +196,24 @@ export default function Navbar() {
                   ) : null}
                 </AnimatePresence>
               </div>
+              )}
 
               <div className="h-6 w-px bg-border mx-1" />
 
               {user ? (
                 <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      className="flex items-center gap-2 h-10 px-3 rounded-xl border border-border bg-card hover:border-purple-500/50 hover:text-purple-500 transition-all group"
+                      title="Admin Dashboard"
+                    >
+                      <Shield className="h-4 w-4 text-purple-500" />
+                      <span className="hidden lg:inline text-xs font-bold text-foreground group-hover:text-purple-500 transition-colors">
+                        Admin
+                      </span>
+                    </Link>
+                  )}
                   {isParent && (
                     <Link
                       to="/parent/dashboard"
@@ -282,9 +306,11 @@ export default function Navbar() {
                         </div>
                       )}
                     </div>
+                    {displayName && (
                     <span className="max-w-[8rem] truncate text-sm font-bold text-foreground group-hover:text-primary transition-colors">
-                      {username}
+                      {displayName}
                     </span>
+                    )}
                   </Link>
 
                   <button 
@@ -357,10 +383,11 @@ export default function Navbar() {
               </form>
 
               <div className="mb-4 grid grid-cols-2 gap-2">
-                {primaryLinks.map((link) => (
+                {links.map((link) => (
                   <NavLink
                     key={link.to}
                     to={link.to}
+                    end={link.to === '/admin' || link.to === '/'}
                     onClick={() => setIsOpen(false)}
                     className={({ isActive }) =>
                       `rounded-[1rem] px-4 py-3 text-sm font-semibold ${
@@ -417,6 +444,7 @@ export default function Navbar() {
                 )}
               </AnimatePresence>
 
+              {!isAdmin && (
               <details className="mb-4 rounded-[1.2rem] border border-border bg-card">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
                   More options
@@ -440,6 +468,7 @@ export default function Navbar() {
                   ))}
                 </div>
               </details>
+              )}
 
               <div className="mb-4 flex items-center justify-between rounded-[1.2rem] border border-border bg-card px-4 py-3">
                 <span className="text-sm font-semibold text-foreground">Appearance</span>
@@ -469,12 +498,18 @@ export default function Navbar() {
                     </span>
                   )}
                   <div>
-                    <div className="text-sm font-semibold text-foreground">{username}</div>
+                    <div className="text-sm font-semibold text-foreground">{displayName || 'Loading...'}</div>
                     <div className="text-xs text-muted-foreground">{user ? 'Signed in' : 'Guest'}</div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <Link to="/admin" onClick={() => setIsOpen(false)} className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5">
+                      <Shield className="h-3.5 w-3.5 text-purple-500" />
+                      Admin
+                    </Link>
+                  )}
                   {isParent && (
                     <Link to="/parent/dashboard" onClick={() => setIsOpen(false)} className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5">
                       <Shield className="h-3.5 w-3.5 text-amber-500" />

@@ -1,0 +1,1 @@
+SELECT * FROM public.child_profiles WHERE user_id = '2f3f56e7-4e3e-4e2d-bc7f-8e5f5c7a8b9c' OR child_user_id = '2f3f56e7-4e3e-4e2d-bc7f-8e5f5c7a8b9c';

@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { User, Settings, Bell, Palette, Moon, Sun, Monitor, Sparkles, Mail, Edit2, Check, X as XIcon, Camera, Shield, ArrowRight, HelpCircle } from 'lucide-react';
+import { User, Settings, Bell, Palette, Moon, Sun, Monitor, Sparkles, Mail, Edit2, Check, X as XIcon, Camera, Shield, ArrowRight, HelpCircle, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '../context/AuthContext';
 import { useParentalControls } from '../context/ParentalControlContext';
 import { useNavigate } from 'react-router-dom';
 import { settingsService } from '../services/settingsService';
 import OnboardingModal from '../components/OnboardingModal';
+import InvitationManager from '../components/InvitationManager';
+import { supabase } from '../lib/supabase';
 
 const Profile = () => {
   const { theme, setTheme } = useTheme();
   const { user, profile: userProfile, updateProfile, uploadAvatar, loading: authLoading } = useAuth();
-  const { isParent } = useParentalControls();
+  const { isParent, isChild, pendingInvitations } = useParentalControls();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [localProfile, setLocalProfile] = useState({ name: '', email: '', avatar: '' });
@@ -34,6 +36,25 @@ const Profile = () => {
 
   const [userAge, setUserAge] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [parentRequestStatus, setParentRequestStatus] = useState(null);
+
+  useEffect(() => {
+    if (!user) return
+    supabase.from('parent_role_requests').select('status').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+      if (data) setParentRequestStatus(data.status)
+    })
+  }, [user])
+
+  const handleRequestParentRole = async () => {
+    try {
+      const { error } = await supabase.from('parent_role_requests').insert({ user_id: user.id })
+      if (error) throw error
+      setParentRequestStatus('pending')
+      toast.success('Parent role request submitted. Admin will review it.')
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit request')
+    }
+  }
 
   const [playbackSettings, setPlaybackSettings] = useState(() => {
     const saved = localStorage.getItem('playbackSettings');
@@ -284,6 +305,12 @@ const Profile = () => {
               })}
             </nav>
 
+            {(isChild || pendingInvitations?.length > 0) && (
+              <>
+                <div className="w-full h-px bg-border my-6"></div>
+                <InvitationManager />
+              </>
+            )}
             {isParent && (
               <>
                 <div className="w-full h-px bg-border my-6"></div>
@@ -295,6 +322,31 @@ const Profile = () => {
                   <span>Parent Dashboard</span>
                   <ArrowRight className="w-4 h-4 ml-auto" />
                 </button>
+              </>
+            )}
+            {!isChild && !isParent && userProfile?.role === 'user' && (
+              <>
+                <div className="w-full h-px bg-border my-6"></div>
+                {parentRequestStatus === 'pending' ? (
+                  <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    <HelpCircle className="w-5 h-5" />
+                    <span>Parent role request pending</span>
+                  </div>
+                ) : parentRequestStatus === 'approved' ? (
+                  <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-green-500/10 text-green-500 border border-green-500/20">
+                    <Shield className="w-5 h-5" />
+                    <span>Parent role approved!</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleRequestParentRole}
+                    className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                  >
+                    <Shield className="w-5 h-5" />
+                    <span>Request Parent Role</span>
+                    <ArrowRight className="w-4 h-4 ml-auto" />
+                  </button>
+                )}
               </>
             )}
           </motion.div>
@@ -376,13 +428,15 @@ const Profile = () => {
                    </div>
 
                    <div className="pt-6 border-t border-border">
-                     <button
-                       onClick={() => setShowOnboarding(true)}
-                       className="btn-secondary w-full justify-center gap-2 py-3"
-                     >
-                       <HelpCircle className="w-4 h-4" />
-                       Retake Preferences Quiz
-                     </button>
+                     {!isChild && (
+                        <button
+                          onClick={() => setShowOnboarding(true)}
+                          className="btn-secondary w-full justify-center gap-2 py-3"
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                          Retake Preferences Quiz
+                        </button>
+                     )}
                      {userAge && (
                        <p className="text-xs text-muted-foreground mt-2 text-center">
                          Age on profile: {userAge} ({userAge >= 18 ? 'Adult' : 'Under 18 — mature content filtered'})

@@ -10,16 +10,36 @@ export default function ForgotPassword() {
   const [success, setSuccess] = useState(false);
   const { resetPassword } = useAuth();
 
+  const getErrorMessage = (err) => {
+    const msg = err?.message || ''
+    if (msg.includes('Invalid email')) return 'Enter a valid email address.'
+    if (msg.includes('rate_limit') || msg.includes('Too many')) return 'Too many requests. Wait a minute.'
+    if (msg.includes('network') || msg.includes('Network')) return 'Connection lost. Check your internet.'
+    if (msg.includes('not found') || msg.includes('no user')) return 'No account found with this email.'
+    return 'Failed to send reset email. Try again later.'
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError('');
 
+    if (!email.trim()) {
+      setError('Enter your email address.')
+      setLoading(false)
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid email address.')
+      setLoading(false)
+      return
+    }
+
     try {
-      await resetPassword(email);
+      await resetPassword(email.trim());
       setSuccess(true);
     } catch (err) {
-      setError(err.message || 'Failed to send reset email');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
