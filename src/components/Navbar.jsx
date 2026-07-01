@@ -537,6 +537,17 @@ export default function Navbar() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {plan !== 'ultimate' && dailyUsedSeconds > 0 && (
+                    <div className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-bold ${
+                      watchTimeService.isLimitReached(plan, dailyUsedSeconds)
+                        ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                        : 'border-amber-500/20 bg-amber-500/5 text-amber-400'
+                    }`}>
+                      <Clock className="h-3 w-3" />
+                      <span>{watchTimeService.getRemainingMinutes(plan, dailyUsedSeconds)}m</span>
+                    </div>
+                  )}
+
                   {isAdmin && (
                       <Link to="/admin" onClick={() => setIsOpen(false)} className="btn-secondary px-3 py-2 text-sm flex items-center gap-1.5">
                         <Shield className="h-3.5 w-3.5 text-purple-500" />

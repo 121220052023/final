@@ -606,36 +606,37 @@ export default function MovieDetails() {
 
                 <div className="mt-8 flex flex-wrap gap-3">
                   {trailer ? (
-                    <button onClick={() => setShowTrailer(true)} className="btn-secondary border-white/20 bg-black/30 px-6 py-3.5 text-white">
+                    <button onClick={() => setShowTrailer(true)} className="btn-secondary border-white/20 bg-black/30 px-4 sm:px-6 py-3 text-white">
                       Trailer
                     </button>
                   ) : null}
                   <button
                     onClick={handleWatchNow}
                     disabled={limitReached}
-                    className={`${limitReached ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'} flex-1 justify-center px-6 py-3.5`}
+                    className={`${limitReached ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'} flex-1 justify-center px-4 sm:px-6 py-3 text-sm sm:text-base`}
                   >
                     {limitReached ? 'Limit reached' : 'Watch Now'}
                   </button>
                   <button
                     onClick={handleToggleWatchlist}
-                    className={`${isInWatchlist ? 'btn-soul' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
+                    className={`${isInWatchlist ? 'btn-soul' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-3 sm:px-5 py-3 text-sm`}
                   >
                     <Plus className="h-4 w-4" />
-                    {isInWatchlist ? 'Saved for later' : 'Watch later'}
+                    <span className="hidden sm:inline">{isInWatchlist ? 'Saved for later' : 'Watch later'}</span>
+                    <span className="sm:hidden">{isInWatchlist ? 'Saved' : 'Later'}</span>
                   </button>
                   <button
                     onClick={handleToggleLike}
-                    className={`${isLiked ? 'btn-primary' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-6 py-3.5`}
+                    className={`${isLiked ? 'btn-primary' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-3 sm:px-5 py-3 text-sm`}
                   >
                     <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
-                    {isLiked ? 'Liked' : 'Like'}
+                    <span className="hidden sm:inline">{isLiked ? 'Liked' : 'Like'}</span>
                   </button>
                   <button
                     onClick={handleMarkAsWatched}
                     disabled={!watched && limitReached}
                     title={watched ? 'Remove from watch history' : 'Mark as watched'}
-                    className={`${watched ? 'btn-accent' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-3 py-3.5`}
+                    className={`${watched ? 'btn-accent' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-3 py-3`}
                   >
                     <Eye className="h-4 w-4" />
                   </button>
