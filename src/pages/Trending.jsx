@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock3, Heart, Info, MinusCircle, Play, PlusCircle, TrendingUp } from 'lucide-react';
-import { tmdbApi } from '../services/tmdb';
+import { contentService } from '../services/contentService';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +43,7 @@ export default function Trending() {
     const fetchTrending = async () => {
       setLoading(true);
       try {
-        const data = await tmdbApi.getTrendingMovies(timeWindow, page);
+        const data = await contentService.getTrendingMoviesTMDB(timeWindow, page);
         if (!cancelled) {
           setTrendingMovies((data.results || []).slice(0, 21).map(normalizeMovie).filter(Boolean));
           setTotalPages(Math.min(data.total_pages || 1, 500));

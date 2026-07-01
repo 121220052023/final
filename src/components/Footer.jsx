@@ -1,39 +1,41 @@
 import { ArrowUp, Heart, Mail, Sparkles, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-
-const footerColumns = [
-  {
-    title: 'Discover',
-    links: [
-      { label: 'Home', to: '/' },
-      { label: 'For You', to: '/for-you' },
-      { label: 'Trending', to: '/trending' },
-    ],
-  },
-  {
-    title: 'Library',
-    links: [
-      { label: 'Watchlist', to: '/watchlist' },
-      { label: 'Liked', to: '/liked-movies' },
-      { label: 'History', to: '/history' },
-    ],
-  },
-  {
-    title: 'About',
-    links: [
-      { label: 'Pricing', to: '/pricing' },
-      { label: 'About', to: '/about' },
-      { label: 'Contact', to: '/contact' },
-    ],
-  },
-];
+import { useTranslation } from '../context/LanguageContext';
 
 export default function Footer() {
   const { isAdmin } = useAuth();
+  const { t } = useTranslation();
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const footerColumns = useMemo(() => [
+    {
+      title: t('footer.discover', 'Discover'),
+      links: [
+        { label: t('nav.home', 'Home'), to: '/' },
+        { label: t('nav.forYou', 'For You'), to: '/for-you' },
+        { label: t('nav.trending', 'Trending'), to: '/trending' },
+      ],
+    },
+    {
+      title: t('footer.library', 'Library'),
+      links: [
+        { label: t('nav.watchlist', 'Watchlist'), to: '/watchlist' },
+        { label: t('nav.liked', 'Liked'), to: '/liked-movies' },
+        { label: t('footer.history', 'History'), to: '/history' },
+      ],
+    },
+    {
+      title: t('footer.about', 'About'),
+      links: [
+        { label: t('nav.pricing', 'Pricing'), to: '/pricing' },
+        { label: t('nav.about', 'About'), to: '/about' },
+        { label: t('nav.contact', 'Contact'), to: '/contact' },
+      ],
+    },
+  ], [t]);
 
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
@@ -48,11 +50,11 @@ export default function Footer() {
           <div className="space-y-5">
             <div className="display-font text-3xl font-bold text-foreground">Ocean of Movies</div>
             <p className="max-w-md text-sm leading-7 text-muted-foreground">
-              A wider front page for movies, series, books, saved shelves, and a personal lane that learns from what you actually watch.
+              {t('footer.tagline', 'A wider front page for movies, series, books, saved shelves, and a personal lane that learns from what you actually watch.')}
             </p>
 
             <div className="flex items-center gap-3 text-muted-foreground">
-              <a href="mailto:medora9990@gmail.com" className="btn-secondary h-11 w-11 rounded-full p-0">
+              <a href="mailto:support@oceanofmovies.com" className="btn-secondary h-11 w-11 rounded-full p-0">
                 <Mail className="h-4 w-4" />
               </a>
               {isAdmin ? (
@@ -94,7 +96,7 @@ export default function Footer() {
 
         <div className="page-shell-wide mt-10 flex flex-col gap-3 border-t border-border pt-6 text-xs uppercase tracking-[0.24em] text-muted-foreground md:flex-row md:items-center md:justify-between">
           <span>© {new Date().getFullYear()} Ocean of Movies</span>
-          <span>Discovery, watch later, and personal taste in one place</span>
+          <span>{t('footer.subtitle', 'Discovery, watch later, and personal taste in one place')}</span>
         </div>
       </footer>
 

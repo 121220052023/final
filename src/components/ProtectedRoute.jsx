@@ -34,14 +34,10 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
     return <Navigate to="/login" replace />
   }
 
-  // If logged in but profile not loaded yet, this shouldn't happen but handle it
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground text-sm font-medium">Loading profile...</p>
-        </div>
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -56,6 +52,11 @@ const ProtectedRoute = ({ children, requireParent = false, requireAdmin = false 
 
   if (requireAdmin && profile?.role !== 'admin') {
     return <Navigate to="/" replace />
+  }
+
+  // Redirect admin users away from user-facing pages to /admin
+  if (profile?.role === 'admin' && !requireAdmin) {
+    return <Navigate to="/admin" replace />
   }
 
   return children

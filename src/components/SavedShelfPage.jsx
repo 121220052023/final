@@ -127,10 +127,10 @@ export default function SavedShelfPage({
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => navigate(`/watch/${getMediaId(item)}`, { state: { type: item.Type || 'movie' } })}
+                      onClick={() => navigate(`/movie/${getMediaId(item)}`, { state: { type: item.Type || 'movie' } })}
                       className="btn-primary flex-1 justify-center px-4 py-2 text-sm"
                     >
-                      Watch
+                      Details
                     </button>
                     {onRemove ? (
                       <button

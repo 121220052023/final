@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Clapperboard, Film, Play, Search, Tv } from 'lucide-react';
-import { tmdbApi } from '../services/tmdb';
+import { contentService } from '../services/contentService';
 import { googleBooksApi } from '../services/googleBooks';
 import Pagination from '../components/Pagination';
 import { useParentalControls } from '../context/ParentalControlContext';
@@ -71,7 +71,7 @@ export default function SearchResults() {
       setLoading(true);
       try {
         const [media, books] = await Promise.all([
-          tmdbApi.searchMovies(searchQuery, 1),
+          contentService.searchMulti(searchQuery, 1),
           googleBooksApi.searchBooks(searchQuery, 8),
         ]);
 

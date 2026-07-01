@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ocean of Movies</string>
+    <string name="title_activity_main">Ocean of Movies</string>
+    <string name="package_name">com.oceanofmovies.app</string>
+    <string name="custom_url_scheme">com.oceanofmovies.app</string>
+</resources>

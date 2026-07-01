@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { User, Settings, Bell, Palette, Moon, Sun, Monitor, Sparkles, Mail, Edit2, Check, X as XIcon, Camera, Shield, ArrowRight, HelpCircle, Users } from 'lucide-react';
+import {
+  User, Settings, Bell, Palette, Moon, Sun, Monitor, Sparkles,
+  Mail, Edit2, Check, X as XIcon, Camera, Shield, ArrowRight,
+  HelpCircle, Users, CreditCard, ExternalLink, Crown, Loader,
+  Film, Clock, ChevronRight, CheckCircle2, AlertCircle,
+  Music, Star, Gift, TrendingUp, Heart, UserCheck,
+  LogOut, Download, Key, Smartphone
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '../context/AuthContext';
 import { useParentalControls } from '../context/ParentalControlContext';
@@ -10,6 +17,7 @@ import { settingsService } from '../services/settingsService';
 import OnboardingModal from '../components/OnboardingModal';
 import InvitationManager from '../components/InvitationManager';
 import { supabase } from '../lib/supabase';
+import { useSubscription } from '../context/SubscriptionContext';
 
 const Profile = () => {
   const { theme, setTheme } = useTheme();
@@ -22,7 +30,6 @@ const Profile = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
 
   const [notifications, setNotifications] = useState(() => {
     const saved = localStorage.getItem('notificationSettings');
@@ -37,6 +44,7 @@ const Profile = () => {
   const [userAge, setUserAge] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [parentRequestStatus, setParentRequestStatus] = useState(null);
+  const { plan, subscription, loading: subLoading, openPortal, isExpired, previousPlan } = useSubscription();
 
   useEffect(() => {
     if (!user) return
@@ -65,14 +73,11 @@ const Profile = () => {
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // Theme is managed by next-themes (localStorage) — no need to read it manually here
-
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const data = await settingsService.get();
         if (data) {
-          // Don't override theme from DB — next-themes handles theme persistence via localStorage
           if (data.age) setUserAge(data.age);
           setPlaybackSettings(prev => ({
             ...prev,
@@ -87,7 +92,6 @@ const Profile = () => {
           }));
         }
       } catch {
-        // Use defaults
       } finally {
         setSettingsLoaded(true);
       }
@@ -138,7 +142,10 @@ const Profile = () => {
   if (authLoading || !settingsLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading your profile...</p>
+        </div>
       </div>
     );
   }
@@ -153,7 +160,8 @@ const Profile = () => {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'preferences', label: 'Preferences', icon: Settings },
+    { id: 'preferences', label: 'Preferences', icon: Palette },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
 
@@ -180,14 +188,11 @@ const Profile = () => {
       setLocalProfile({ ...localProfile, name: tempName.trim() });
       setOriginalName(tempName.trim());
       setIsEditingName(false);
-      setSaveMessage({ type: 'success', text: 'Name updated successfully!' });
       toast.success('Name updated successfully!');
     } catch {
-      setSaveMessage({ type: 'error', text: 'Failed to update name' });
       toast.error('Failed to update name');
     } finally {
       setIsSaving(false);
-      setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
     }
   };
 
@@ -201,171 +206,210 @@ const Profile = () => {
     return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.08 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 16 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  };
+
+  const Toggle = ({ checked, onChange }) => (
+    <button
+      type="button"
+      onClick={onChange}
+      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        checked
+          ? 'bg-gradient-to-r from-primary to-secondary'
+          : 'bg-surface-container-high'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+
+  const SectionCard = ({ icon: Icon, title, children, className = '' }) => (
+    <div className={`rounded-2xl border border-border bg-card/60 p-6 space-y-5 ${className}`}>
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-secondary/15">
+          <Icon className="h-4.5 w-4.5 text-primary" />
+        </div>
+        <h3 className="text-lg font-bold text-foreground tracking-tight">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-background pt-28 pb-16">
+    <div className="min-h-screen bg-background pt-28 pb-20">
       <div className="page-shell-wide">
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="mb-10"
         >
-          <div className="section-label">Account</div>
+          <span className="section-label">Account</span>
           <h1 className="display-font mt-3 text-5xl font-bold leading-[0.92] md:text-6xl">
             Your Profile
           </h1>
-          <p className="mt-5 text-base leading-8 text-muted-foreground">
-            Manage your account settings and preferences
+          <p className="mt-4 text-base leading-7 text-muted-foreground max-w-lg">
+            Manage your account settings, preferences, and subscription.
           </p>
         </motion.div>
 
-        {saveMessage.text && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`mb-6 rounded-[1.2rem] border px-4 py-3 text-sm ${
-              saveMessage.type === 'success'
-                ? 'border-green-500/20 bg-green-500/8 text-green-400'
-                : 'border-red-500/20 bg-red-500/8 text-red-400'
-            }`}
-          >
-            {saveMessage.text}
-          </motion.div>
-        )}
-
         <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <motion.div
+          {/* ── Sidebar ── */}
+          <motion.aside
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="editorial-panel rounded-[2rem] p-6 h-fit"
+            className="h-fit"
           >
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="relative group">
-                <div className="w-28 h-28 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
-                  {localProfile.avatar ? (
-                    <img src={localProfile.avatar} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    getInitials(localProfile.name)
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => document.getElementById('avatarInput').click()}
-                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Camera className="w-6 h-6 text-white" />
-                </button>
-                <input
-                  type="file"
-                  id="avatarInput"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      try {
-                        const avatarUrl = await uploadAvatar(file);
-                        setLocalProfile({ ...localProfile, avatar: avatarUrl });
-                        setSaveMessage({ type: 'success', text: 'Avatar updated!' });
-                        toast.success('Avatar updated!');
-                      } catch (error) {
-                        console.error('Error uploading avatar:', error);
-                        setSaveMessage({ type: 'error', text: 'Failed to upload avatar' });
-                        toast.error('Failed to upload avatar');
-                      }
-                      setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                    }
-                  }}
-                />
-              </div>
-              <h2 className="mt-4 text-xl font-bold text-foreground">{localProfile.name || 'User'}</h2>
-              <p className="text-sm text-muted-foreground">{localProfile.email}</p>
-            </div>
-
-            <div className="w-full h-px bg-border my-6"></div>
-
-            <nav className="space-y-2">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
+            <div className="editorial-panel rounded-[2rem] p-6">
+              <div className="flex flex-col items-center text-center">
+                <div className="relative group">
+                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary via-secondary to-tertiary p-[3px]">
+                    <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden">
+                      {localProfile.avatar ? (
+                        <img src={localProfile.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl font-bold bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
+                          {getInitials(localProfile.name)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
+                    type="button"
+                    onClick={() => document.getElementById('avatarInput').click()}
+                    className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-primary text-white shadow-lg hover:bg-primary/90 transition-colors"
                   >
-                    <Icon className="w-5 h-5" />
-                    <span>{tab.label}</span>
+                    <Camera className="w-4 h-4" />
                   </button>
-                );
-              })}
-            </nav>
+                  <input
+                    type="file"
+                    id="avatarInput"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        try {
+                          const avatarUrl = await uploadAvatar(file);
+                          setLocalProfile({ ...localProfile, avatar: avatarUrl });
+                          toast.success('Avatar updated!');
+                        } catch {
+                          toast.error('Failed to upload avatar');
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <h2 className="mt-4 text-xl font-bold text-foreground tracking-tight">{localProfile.name || 'User'}</h2>
+                <p className="text-sm text-muted-foreground">{localProfile.email}</p>
+              </div>
 
-            {(isChild || pendingInvitations?.length > 0) && (
-              <>
-                <div className="w-full h-px bg-border my-6"></div>
-                <InvitationManager />
-              </>
-            )}
-            {isParent && (
-              <>
-                <div className="w-full h-px bg-border my-6"></div>
-                <button
-                  onClick={() => navigate('/parent/dashboard')}
-                  className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all"
-                >
-                  <Shield className="w-5 h-5" />
-                  <span>Parent Dashboard</span>
-                  <ArrowRight className="w-4 h-4 ml-auto" />
-                </button>
-              </>
-            )}
-            {!isChild && !isParent && userProfile?.role === 'user' && (
-              <>
-                <div className="w-full h-px bg-border my-6"></div>
-                {parentRequestStatus === 'pending' ? (
-                  <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    <HelpCircle className="w-5 h-5" />
-                    <span>Parent role request pending</span>
-                  </div>
-                ) : parentRequestStatus === 'approved' ? (
-                  <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-green-500/10 text-green-500 border border-green-500/20">
-                    <Shield className="w-5 h-5" />
-                    <span>Parent role approved!</span>
-                  </div>
-                ) : (
+              <div className="mt-6 space-y-1.5">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                        activeTab === tab.id
+                          ? 'bg-gradient-to-r from-primary/12 to-secondary/12 text-primary shadow-sm'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-primary' : ''}`} />
+                      <span>{tab.label}</span>
+                      {activeTab === tab.id && (
+                        <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <AnimatePresence>
+                {(isChild || pendingInvitations?.length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-6"
+                  >
+                    <div className="w-full h-px bg-border mb-4" />
+                    <InvitationManager />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {isParent && (
+                <>
+                  <div className="w-full h-px bg-border my-4" />
                   <button
-                    onClick={handleRequestParentRole}
-                    className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                    onClick={() => navigate('/parent/dashboard')}
+                    className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all"
                   >
                     <Shield className="w-5 h-5" />
-                    <span>Request Parent Role</span>
+                    <span>Parent Dashboard</span>
                     <ArrowRight className="w-4 h-4 ml-auto" />
                   </button>
-                )}
-              </>
-            )}
-          </motion.div>
+                </>
+              )}
+              {!isChild && !isParent && userProfile?.role === 'user' && (
+                <>
+                  <div className="w-full h-px bg-border my-4" />
+                  {parentRequestStatus === 'pending' ? (
+                    <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                      <HelpCircle className="w-5 h-5" />
+                      <span>Parent role request pending</span>
+                    </div>
+                  ) : parentRequestStatus === 'approved' ? (
+                    <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-green-500/10 text-green-500 border border-green-500/20">
+                      <Shield className="w-5 h-5" />
+                      <span>Parent role approved!</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleRequestParentRole}
+                      className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all"
+                    >
+                      <Shield className="w-5 h-5" />
+                      <span>Request Parent Role</span>
+                      <ArrowRight className="w-4 h-4 ml-auto" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </motion.aside>
 
+          {/* ── Main Content ── */}
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="editorial-panel rounded-[2rem] p-6 sm:p-8"
+            key={activeTab}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="min-h-[500px]"
           >
+            {/* ═══ Profile Tab ═══ */}
             {activeTab === 'profile' && (
-              <div className="space-y-8">
-                <div>
-                  <div className="flex items-center gap-2 mb-6">
-                    <User className="w-5 h-5 text-primary" />
-                     <h3 className="text-xl font-bold text-foreground">Profile Information</h3>
-                  </div>
-
-                  <div className="space-y-6">
+              <div className="space-y-6">
+                <SectionCard icon={User} title="Profile Information">
+                  <div className="space-y-5">
                     <div>
                       <label className="block text-sm font-semibold text-foreground mb-2">Display Name</label>
                       {isEditingName ? (
@@ -385,7 +429,7 @@ const Profile = () => {
                           <button
                             onClick={handleNameSave}
                             disabled={isSaving}
-                            className="btn-primary px-4 py-3 rounded-xl flex items-center gap-2"
+                            className="btn-primary min-w-[44px] min-h-[44px] px-4 py-3 justify-center"
                           >
                             {isSaving ? (
                               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -393,154 +437,262 @@ const Profile = () => {
                               <Check className="w-5 h-5" />
                             )}
                           </button>
-                          <button onClick={handleNameCancel} className="btn-secondary px-4 py-3 rounded-xl">
+                          <button onClick={handleNameCancel} className="btn-secondary min-w-[44px] min-h-[44px] px-4 py-3 justify-center">
                             <XIcon className="w-5 h-5" />
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-background border border-border">
-                          <span className="text-foreground">{localProfile.name || 'Not set'}</span>
+                        <div className="group flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3.5 transition-all hover:border-primary/30">
+                          <span className="text-foreground font-medium">{localProfile.name || 'Not set'}</span>
                           <button
                             onClick={handleNameEdit}
-                            className="text-primary hover:text-primary/80 font-semibold flex items-center gap-2 text-sm"
+                            className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-primary"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                             Edit
                           </button>
                         </div>
                       )}
                     </div>
-
                     <div>
                       <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Mail className="w-4 h-4" />
+                        <Mail className="w-4 h-4 text-muted-foreground" />
                         Email Address
                       </label>
-                      <div className="flex items-center px-4 py-3 rounded-xl bg-background border border-border opacity-70">
+                      <div className="flex items-center rounded-xl border border-border bg-background/60 px-4 py-3.5">
                         <span className="text-foreground flex-1">{localProfile.email}</span>
                         <span className="text-xs text-muted-foreground font-medium px-3 py-1 rounded-full bg-muted">
-                          Cannot be changed
+                          Verified
                         </span>
                       </div>
                     </div>
-
-
-                   </div>
-
-                   <div className="pt-6 border-t border-border">
-                     {!isChild && (
-                        <button
-                          onClick={() => setShowOnboarding(true)}
-                          className="btn-secondary w-full justify-center gap-2 py-3"
-                        >
-                          <HelpCircle className="w-4 h-4" />
-                          Retake Preferences Quiz
-                        </button>
-                     )}
-                     {userAge && (
-                       <p className="text-xs text-muted-foreground mt-2 text-center">
-                         Age on profile: {userAge} ({userAge >= 18 ? 'Adult' : 'Under 18 — mature content filtered'})
-                       </p>
-                     )}
-                   </div>
-                 </div>
-               </div>
-             )}
-
-            {activeTab === 'preferences' && (
-              <div className="space-y-8">
-                <div>
-                  <div className="flex items-center gap-2 mb-6">
-                     <Palette className="w-5 h-5 text-primary" />
-                     <h3 className="text-xl font-bold text-foreground">Theme Preference</h3>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    {themeOptions.map((option) => {
-                      const Icon = option.icon;
-                      return (
-                        <button
-                          key={option.id}
-                          onClick={() => setTheme(option.id)}
-                          className={`p-6 rounded-xl transition-all duration-300 flex flex-col items-center gap-3 ${
-                            theme === option.id
-                              ? 'bg-primary/10 text-primary border-2 border-primary/30'
-                              : 'bg-background border border-border hover:border-primary/30'
-                          }`}
-                        >
-                          <Icon className="w-8 h-8" />
-                          <span className="font-semibold">{option.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                </SectionCard>
 
-                <div className="w-full h-px bg-border"></div>
-
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-foreground">Playback Settings</h3>
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-background hover:bg-accent transition-all border border-border">
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-1">Auto-play Trailers</h4>
-                      <p className="text-sm text-muted-foreground">Automatically play trailers when viewing movie details</p>
-                    </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  {!isChild && (
                     <button
-                      onClick={() => handlePlaybackToggle('autoplayTrailers')}
-                      className={`w-12 h-6 rounded-full flex items-center px-1 transition-all ${
-                         playbackSettings.autoplayTrailers ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-muted'
-                      }`}
+                      onClick={() => setShowOnboarding(true)}
+                      className="btn-secondary px-5 py-3"
                     >
-                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${playbackSettings.autoplayTrailers ? 'transform translate-x-5' : ''}`}></div>
+                      <HelpCircle className="w-4 h-4" />
+                      Retake Preferences Quiz
                     </button>
-                  </div>
-
-
+                  )}
+                  {userAge && (
+                    <span className="text-sm text-muted-foreground">
+                      Age: {userAge} &middot; {userAge >= 18 ? 'Adult account' : 'Under 18 — mature content filtered'}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
 
-            {activeTab === 'notifications' && (
+            {/* ═══ Preferences Tab ═══ */}
+            {activeTab === 'preferences' && (
               <div className="space-y-6">
-                <div className="flex items-center gap-2 mb-6">
-                   <Bell className="w-5 h-5 text-primary" />
-                   <h3 className="text-xl font-bold text-foreground">Notification Preferences</h3>
-                </div>
+                <SectionCard icon={Palette} title="Theme">
+                  <div className="grid grid-cols-3 gap-3">
+                    {themeOptions.map((option) => {
+                      const Icon = option.icon;
+                      const isActive = theme === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => setTheme(option.id)}
+                          className={`relative flex flex-col items-center gap-2.5 rounded-xl border-2 p-5 transition-all duration-300 ${
+                            isActive
+                              ? 'border-primary bg-gradient-to-b from-primary/8 to-secondary/8 shadow-sm'
+                              : 'border-border bg-background hover:border-primary/30 hover:bg-muted/50'
+                          }`}
+                        >
+                          {isActive && (
+                            <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                              <Check className="h-3 w-3 text-white" />
+                            </span>
+                          )}
+                          <Icon className={`w-7 h-7 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <span className={`text-sm font-semibold ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {option.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SectionCard>
 
-                {Object.entries({
-                  newReleases: { title: 'New Releases', description: 'Get notified about new movie releases', icon: '\uD83C\uDFAC' },
-                  recommendations: { title: 'Recommendations', description: 'Receive personalized movie recommendations', icon: '\u2728' },
-                  watchlistUpdates: { title: 'Watchlist Updates', description: 'Notifications when watchlist movies become available', icon: '\uD83D\uDCCB' },
-                  newsletter: { title: 'Newsletter', description: 'Weekly digest of trending movies and news', icon: '\uD83D\uDCE7' },
-                }).map(([key, { title, description, icon }]) => (
-                  <div key={key} className="flex items-center justify-between p-4 rounded-xl bg-background hover:bg-accent transition-all border border-border">
-                    <div className="flex items-center gap-4">
-                      <span className="text-3xl">{icon}</span>
+                <SectionCard icon={Monitor} title="Playback">
+                  <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4 transition-all hover:border-primary/30">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                        <Film className="w-4.5 h-4.5 text-muted-foreground" />
+                      </div>
                       <div>
-                        <h4 className="font-semibold text-foreground mb-1">{title}</h4>
-                        <p className="text-sm text-muted-foreground">{description}</p>
+                        <h4 className="font-semibold text-foreground text-sm">Auto-play Trailers</h4>
+                        <p className="text-sm text-muted-foreground/80 mt-0.5">Play trailers when viewing movie details</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleNotificationChange(key)}
-                      className={`w-12 h-6 rounded-full flex items-center px-1 transition-all ${
-                         notifications[key] ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-muted'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${notifications[key] ? 'transform translate-x-5' : ''}`}></div>
-                    </button>
+                    <Toggle
+                      checked={playbackSettings.autoplayTrailers}
+                      onChange={() => handlePlaybackToggle('autoplayTrailers')}
+                    />
                   </div>
-                ))}
+                </SectionCard>
+              </div>
+            )}
 
-                <div className="pt-6">
-                   <div className="p-6 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
-                     <div className="flex items-start gap-3">
-                       <Sparkles className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-2">Stay Updated!</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Enable notifications to never miss out on the latest movies and personalized recommendations tailored just for you.
-                        </p>
+            {/* ═══ Billing Tab ═══ */}
+            {activeTab === 'billing' && (
+              <div className="space-y-6">
+                <SectionCard icon={CreditCard} title="Billing & Subscription">
+                  {subLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/8 via-secondary/5 to-tertiary/5 border border-primary/20 p-6">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-primary/5 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
+                        <div className="relative flex items-center gap-4">
+                          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+                            plan === 'free'
+                              ? 'bg-muted'
+                              : 'bg-gradient-to-br from-primary/15 to-secondary/15'
+                          }`}>
+                            <Crown className={`w-7 h-7 ${plan === 'free' ? 'text-muted-foreground' : 'text-primary'}`} />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-xl font-bold text-foreground capitalize">
+                              {plan === 'ultimate' ? 'Ultimate' : plan === 'pro' ? 'Pro' : 'Free'}
+                            </h4>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              {isExpired
+                                ? `Your ${previousPlan ? `${previousPlan.charAt(0).toUpperCase() + previousPlan.slice(1)} plan` : 'paid plan'} has ended. Renew to keep your benefits.`
+                                : plan === 'free'
+                                  ? 'You are on the Free plan. Upgrade to unlock premium features.'
+                                  : subscription?.cancelAtPeriodEnd
+                                    ? 'Your subscription will cancel at the end of the billing period.'
+                                    : `Active${subscription?.currentPeriodEnd ? ` until ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}` : ''}.`
+                              }
+                            </p>
+                          </div>
+                          {plan !== 'free' && (
+                            <span className="flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-500 border border-green-500/20">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Active
+                            </span>
+                          )}
+                        </div>
                       </div>
+
+                      {(subscription?.status || isExpired) && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="rounded-xl border border-border bg-background p-4">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</div>
+                            <div className="mt-2 flex items-center gap-2.5">
+                              <span className={`flex h-2.5 w-2.5 rounded-full ${
+                                isExpired
+                                  ? 'bg-red-500'
+                                  : subscription.status === 'active' || subscription.status === 'trialing'
+                                    ? 'bg-green-500 shadow-sm shadow-green-500/40'
+                                    : subscription.status === 'past_due'
+                                      ? 'bg-yellow-500'
+                                      : 'bg-red-500'
+                              }`} />
+                              <span className="text-lg font-bold text-foreground capitalize">
+                                {isExpired ? 'Expired' : subscription.status}
+                              </span>
+                            </div>
+                          </div>
+                          {subscription.currentPeriodEnd && (
+                            <div className="rounded-xl border border-border bg-background p-4">
+                              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current period ends</div>
+                              <div className="mt-2 text-lg font-bold text-foreground">
+                                {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric'
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        {plan !== 'free' && (
+                          <button
+                            onClick={openPortal}
+                            className="btn-primary px-6 py-3"
+                          >
+                            <CreditCard className="h-4 w-4" />
+                            Manage Subscription
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate('/pricing')}
+                          className="btn-secondary px-6 py-3"
+                        >
+                          {plan === 'free' ? (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              View Plans
+                            </>
+                          ) : (
+                            'Change Plan'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
+            )}
+
+            {/* ═══ Notifications Tab ═══ */}
+            {activeTab === 'notifications' && (
+              <div className="space-y-6">
+                <SectionCard icon={Bell} title="Notification Preferences">
+                  <div className="space-y-3">
+                    {[
+                      { key: 'newReleases', title: 'New Releases', description: 'Get notified about new movie and show releases', icon: Film },
+                      { key: 'recommendations', title: 'Recommendations', description: 'Receive personalized movie recommendations', icon: Star },
+                      { key: 'watchlistUpdates', title: 'Watchlist Updates', description: 'Updates when watchlist items become available', icon: Heart },
+                      { key: 'newsletter', title: 'Newsletter', description: 'Weekly digest of trending movies and news', icon: Mail },
+                    ].map(({ key, title, description, icon: Icon }) => (
+                      <div
+                        key={key}
+                        className="group flex items-center justify-between rounded-xl border border-border bg-background p-4 transition-all hover:border-primary/30"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted group-hover:bg-primary/8 transition-colors">
+                            <Icon className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground text-sm">{title}</h4>
+                            <p className="text-sm text-muted-foreground/80 mt-0.5">{description}</p>
+                          </div>
+                        </div>
+                        <Toggle
+                          checked={notifications[key]}
+                          onChange={() => handleNotificationChange(key)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+
+                <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-secondary/5 to-tertiary/5 p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-secondary/15 shrink-0">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground text-base">Stay in the loop</h4>
+                      <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                        Enable notifications to never miss out on the latest releases and curated recommendations just for you.
+                      </p>
                     </div>
                   </div>
                 </div>

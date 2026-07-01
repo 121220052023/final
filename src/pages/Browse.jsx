@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, MinusCircle, PlusCircle, Search, Filter } from 'lucide-react';
-import { tmdbApi } from '../services/tmdb';
+import { contentService } from '../services/contentService';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/Pagination';
 import { toast } from 'sonner';
+import { getRatingValue } from '../utils/media';
 
 const categories = [
   { id: 'popular', label: 'Popular' },
@@ -78,16 +79,16 @@ export default function Browse() {
         } else {
           switch (category) {
             case 'top_rated':
-              data = await tmdbApi.getTopRatedMovies(page);
+              data = await contentService.getTopRatedMovies(page);
               break;
             case 'upcoming':
-              data = await tmdbApi.getUpcomingMovies(page);
+              data = await contentService.getUpcomingMovies(page);
               break;
             case 'now_playing':
-              data = await tmdbApi.getNowPlayingMovies(page);
+              data = await contentService.getNowPlayingMovies(page);
               break;
             default:
-              data = await tmdbApi.getPopularMovies(page);
+              data = await contentService.getPopularMovies(page);
           }
         }
 
@@ -286,7 +287,7 @@ export default function Browse() {
                     <h3 className="display-font text-lg font-bold text-foreground transition-colors group-hover:text-primary">
                       {movie.Title}
                     </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{movie.Year} • {movie.rating?.toFixed(1) || 'N/A'} rating</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{movie.Year} • {getRatingValue(movie) != null ? `${getRatingValue(movie).toFixed(1)} rating` : 'N/A rating'}</p>
                     <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{movie.Plot}</p>
                   </div>
                 </button>

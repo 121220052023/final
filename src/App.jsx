@@ -8,7 +8,9 @@ import AIAssistant from './components/AIAssistant';
 import Home from './pages/Home';
 import MovieDetails from './pages/MovieDetails';
 import ErrorBoundary from './components/ErrorBoundary';
+import ExpiredPlanBanner from './components/ExpiredPlanBanner';
 import OnboardingModal from './components/OnboardingModal';
+import { PageSkeleton } from './components/Skeletons';
 import { useAuth } from './context/AuthContext';
 import { useParentalControls } from './context/ParentalControlContext';
 import { Moon, Lock, LogOut } from 'lucide-react';
@@ -18,9 +20,11 @@ import './App.css';
 import { ThemeProvider } from 'next-themes';
 import { WatchlistProvider } from './context/WatchlistContext';
 import { LikedMoviesProvider } from './context/LikedMoviesContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import { AuthProvider } from './context/AuthContext';
 import { ParentalControlProvider } from './context/ParentalControlContext';
 import { NotificationsProvider } from './context/NotificationsContext';
+import { LanguageProvider } from './context/LanguageContext';
 
 const ForYou = lazy(() => import('./pages/ForYou'));
 const Pricing = lazy(() => import('./pages/Pricing'));
@@ -47,10 +51,14 @@ const ParentActivity = lazy(() => import('./pages/parent/Activity'));
 const ParentRequests = lazy(() => import('./pages/parent/Requests'));
 const ChildProfile = lazy(() => import('./pages/parent/ChildProfile'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'));
 const AdminContent = lazy(() => import('./pages/admin/ContentManager'));
 const AdminReports = lazy(() => import('./pages/admin/Reports'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings'));
 const AdminUserDetail = lazy(() => import('./pages/admin/UserDetail'));
+const AdminLibrary = lazy(() => import('./pages/admin/AdminLibrary'));
+const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
+const RequestContent = lazy(() => import('./pages/RequestContent'));
 const ProtectedRoute = lazy(() => import('./components/ProtectedRoute'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -63,14 +71,7 @@ function ScrollToTop() {
 }
 
 function PageLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-muted-foreground text-sm font-medium">Loading...</p>
-      </div>
-    </div>
-  );
+  return <PageSkeleton />;
 }
 
 function OnboardingGate({ children }) {
@@ -129,7 +130,7 @@ function ChildRestrictions() {
   }, [isChild, isBedtime, isAccountLocked, loading]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try { await supabase.auth.signOut(); } catch {}
     navigate('/login');
   };
 
@@ -198,6 +199,7 @@ function AppLayout() {
     ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname),
   [pathname]);
   const isAdminPage = pathname.startsWith('/admin');
+  const showUserUI = profile && profile?.role !== 'admin';
   let isChildUser = false;
   try {
     const ctx = useParentalControls();
@@ -213,12 +215,13 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {!isAuthPage && <Navbar />}
-      <main className="flex-1 relative">
+      {showUserUI && !isAuthPage && !isAdminPage && <Navbar />}
+      {showUserUI && !isAuthPage && !isAdminPage && <ExpiredPlanBanner />}
+      <main className={`flex-1 relative${isAdminPage ? '' : ''}`}>
         <AppRoutes />
       </main>
-      {!isAuthPage && <Footer />}
-      {!isAuthPage && !isAdminPage && !isChildUser && <AIAssistant />}
+      {!isAuthPage && !isAdminPage && <Footer />}
+      {!isAuthPage && !isChildUser && !isAdminPage && <AIAssistant />}
       <ChildRestrictions />
     </div>
   );
@@ -256,10 +259,14 @@ function AppRoutes() {
           <Route path="/parent/requests" element={<ProtectedRoute requireParent><ParentRequests /></ProtectedRoute>} />
           <Route path="/parent/child/:userId" element={<ProtectedRoute requireParent><ChildProfile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/analytics" element={<ProtectedRoute requireAdmin><AdminAnalytics /></ProtectedRoute>} />
           <Route path="/admin/content" element={<ProtectedRoute requireAdmin><AdminContent /></ProtectedRoute>} />
+          <Route path="/admin/library" element={<ProtectedRoute requireAdmin><AdminLibrary /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute requireAdmin><AdminReports /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requireAdmin><AdminSettings /></ProtectedRoute>} />
           <Route path="/admin/user/:userId" element={<ProtectedRoute requireAdmin><AdminUserDetail /></ProtectedRoute>} />
+          <Route path="/admin/requests" element={<ProtectedRoute requireAdmin><AdminRequests /></ProtectedRoute>} />
+          <Route path="/request-content" element={<ProtectedRoute><RequestContent /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -327,10 +334,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <AuthProvider>
+          <LanguageProvider>
           <ParentalControlProvider>
             <NotificationsProvider>
               <WatchlistProvider>
                 <LikedMoviesProvider>
+                  <SubscriptionProvider>
                   <Router>
                     <OnboardingGate>
                       <ScrollToTop />
@@ -351,10 +360,12 @@ function App() {
                       },
                     }}
                   />
+                  </SubscriptionProvider>
                 </LikedMoviesProvider>
               </WatchlistProvider>
             </NotificationsProvider>
           </ParentalControlProvider>
+          </LanguageProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

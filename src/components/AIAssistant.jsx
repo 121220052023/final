@@ -4,10 +4,12 @@ import { Bot, Play, Send, Sparkles, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAIAssistantResponse } from '../services/aiService';
 import { useParentalControls } from '../context/ParentalControlContext';
+import { useSubscription } from '../context/SubscriptionContext';
 
 export default function AIAssistant() {
   const navigate = useNavigate();
   const { isContentAllowed, isChild } = useParentalControls();
+  const { isProOrAbove } = useSubscription();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -66,19 +68,27 @@ export default function AIAssistant() {
     }
   };
 
+  const handleOpen = () => {
+    if (!isProOrAbove) {
+      navigate('/pricing');
+      return;
+    }
+    setIsOpen((open) => !open);
+  };
+
   return (
     <>
       <motion.button
         className="editorial-panel fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white"
         whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.94 }}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={handleOpen}
       >
         {isOpen ? <X className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
       </motion.button>
 
       <AnimatePresence>
-        {isOpen ? (
+        {isOpen && isProOrAbove ? (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

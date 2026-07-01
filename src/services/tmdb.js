@@ -257,4 +257,11 @@ export const tmdbApi = {
 
     return { results: allResults.slice(0, 20), total_results: allResults.length };
   },
+
+  discoverMovies: async (params = {}) => {
+    return makeRequest('/discover/movie', { language: 'en-US', sort_by: 'popularity.desc', ...params });
+  },
+  discoverTV: async (params = {}) => {
+    return makeRequest('/discover/tv', { language: 'en-US', sort_by: 'popularity.desc', ...params });
+  },
 };

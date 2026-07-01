@@ -3,11 +3,11 @@ import { motion } from 'framer-motion'
 import { Users, Eye, Heart, MessageSquare, Clock, TrendingUp, Activity, Star, Loader2, FileText, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
+import AdminSidebar from '../../components/AdminSidebar'
 
 const Reports = () => {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [exportLoading, setExportLoading] = useState(false)
 
   useEffect(() => { loadStats() }, [])
 
@@ -69,79 +69,86 @@ const Reports = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="admin-body flex items-center justify-center">
+        <AdminSidebar />
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   const cards = [
-    { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Watch History Entries', value: stats?.totalWatchHistory || 0, icon: Eye, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Total Reviews', value: stats?.totalReviews || 0, icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { label: 'Liked Movies', value: stats?.totalLikedMovies || 0, icon: Heart, color: 'text-pink-500', bg: 'bg-pink-500/10' },
-    { label: 'Total Watch Time', value: `${Math.round((stats?.totalWatchTime || 0) / 60)}h`, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { label: 'Avg Watch Time/User', value: `${Math.round((stats?.avgWatchTimePerUser || 0) / 60)}h`, icon: Activity, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-    { label: 'Avg Reviews/User', value: stats?.avgReviewsPerUser || 0, icon: Star, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-    { label: 'Engagement Rate', value: stats?.totalUsers ? `${((stats.totalWatchHistory / stats.totalUsers) * 100).toFixed(0)}%` : '0%', icon: TrendingUp, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { label: 'Total Users', value: stats?.totalUsers || 0, icon: Users },
+    { label: 'Watch History', value: stats?.totalWatchHistory || 0, icon: Eye },
+    { label: 'Total Reviews', value: stats?.totalReviews || 0, icon: MessageSquare },
+    { label: 'Liked Movies', value: stats?.totalLikedMovies || 0, icon: Heart },
+    { label: 'Total Watch Time', value: `${Math.round((stats?.totalWatchTime || 0) / 60)}h`, icon: Clock },
+    { label: 'Avg Watch/User', value: `${Math.round((stats?.avgWatchTimePerUser || 0) / 60)}h`, icon: Activity },
+    { label: 'Avg Reviews/User', value: stats?.avgReviewsPerUser || 0, icon: Star },
+    { label: 'Engagement Rate', value: stats?.totalUsers ? `${((stats.totalWatchHistory / stats.totalUsers) * 100).toFixed(0)}%` : '0%', icon: TrendingUp },
   ]
 
   return (
-    <div className="min-h-screen bg-background pt-28 pb-16">
-      <div className="page-shell-wide">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex items-start justify-between gap-6">
-          <div>
-            <div className="section-label">Administration</div>
-            <h1 className="display-font mt-3 text-5xl font-bold leading-[0.92] md:text-6xl">
-              Reports & Analytics
-            </h1>
-            <p className="mt-5 text-base leading-8 text-muted-foreground">
-              Platform-wide metrics and user engagement data
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={exportCSV} disabled={exportLoading} className="btn-ghost h-11 px-4 rounded-xl font-bold flex items-center gap-2">
-              <FileText className="w-4 h-4" /> CSV
-            </button>
-            <button onClick={exportJSON} disabled={exportLoading} className="btn-ghost h-11 px-4 rounded-xl font-bold flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4" /> JSON
-            </button>
-          </div>
-        </motion.div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {cards.map((item, i) => (
-            <motion.div
-              key={item.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="bg-card rounded-2xl p-5 border border-border"
-            >
-              <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center mb-3`}>
-                <item.icon className={`w-5 h-5 ${item.color}`} />
+    <div className="admin-body">
+      <AdminSidebar />
+      <div className="admin-main">
+        <div className="max-w-[1400px]">
+          <div className="flex items-start justify-between gap-6 mb-10">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="admin-glow-line" />
+                <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Administration</span>
               </div>
-              <div className="text-2xl font-black text-foreground">{item.value}</div>
-              <div className="text-xs font-medium text-muted-foreground mt-1">{item.label}</div>
-            </motion.div>
-          ))}
-        </div>
+              <h1 className="text-4xl font-extrabold text-foreground md:text-5xl">
+                Reports & Analytics
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Platform-wide metrics and user engagement data
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={exportCSV} className="admin-btn-secondary h-10">
+                <FileText className="w-4 h-4" /> CSV
+              </button>
+              <button onClick={exportJSON} className="admin-btn-secondary h-10">
+                <FileSpreadsheet className="w-4 h-4" /> JSON
+              </button>
+            </div>
+          </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-8 bg-card rounded-2xl border border-border p-6"
-        >
-          <h2 className="text-lg font-bold text-foreground mb-2">Data Summary</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Platform has <strong className="text-foreground">{stats?.totalUsers}</strong> registered users
-            with <strong className="text-foreground">{stats?.totalWatchHistory}</strong> watch history entries,
-            <strong className="text-foreground"> {stats?.totalReviews}</strong> reviews, and
-            <strong className="text-foreground"> {stats?.totalLikedMovies}</strong> liked movies.
-            Total watch time across all users is <strong className="text-foreground">{Math.round((stats?.totalWatchTime || 0) / 60)} hours</strong>.
-          </p>
-        </motion.div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            {cards.map((item, i) => (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="admin-card p-4"
+              >
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center mb-2.5">
+                  <item.icon className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div className="mono-num text-2xl text-foreground">{item.value}</div>
+                <div className="text-xs mt-0.5 text-muted-foreground">{item.label}</div>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="admin-card p-6"
+          >
+            <h2 className="text-base font-bold text-foreground mb-2">Data Summary</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Platform has <strong className="text-foreground">{stats?.totalUsers}</strong> registered users
+              with <strong className="text-foreground">{stats?.totalWatchHistory}</strong> watch history entries,
+              <strong className="text-foreground"> {stats?.totalReviews}</strong> reviews, and
+              <strong className="text-foreground"> {stats?.totalLikedMovies}</strong> liked movies.
+              Total watch time across all users is <strong className="text-foreground">{Math.round((stats?.totalWatchTime || 0) / 60)} hours</strong>.
+            </p>
+          </motion.div>
+        </div>
       </div>
     </div>
   )

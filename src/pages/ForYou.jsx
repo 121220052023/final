@@ -1,14 +1,14 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, MessageSquare, Heart, Bookmark, Sparkles, Play } from 'lucide-react';
+import { ArrowRight, MessageSquare, Heart, Bookmark, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useWatchlist } from '../context/WatchlistContext';
-import { GENRE_MAP, getMoviesByGenre, getTrendingMovies } from '../services/imdbService';
+import { GENRE_MAP } from '../services/imdbService';
+import { contentService } from '../services/contentService';
 import { reviewService } from '../services/reviewService';
-import { tmdbApi } from '../services/tmdb';
 import { settingsService } from '../services/settingsService';
 import {
   deriveTopGenres,
@@ -32,7 +32,7 @@ const genreToId = Object.entries(GENRE_MAP).reduce((accumulator, [key, value]) =
 const extractBaseId = (value) => value?.toString()?.replace(/-S\d+E\d+$/, '');
 const ITEMS_PER_PAGE = 8;
 
-function ShelfPoster({ item, caption, onOpen, onWatch }) {
+function ShelfPoster({ item, caption, onOpen }) {
   return (
     <article className="movie-card overflow-hidden rounded-[1.4rem]">
       <button onClick={() => onOpen(item)} className="group block w-full text-left">
@@ -53,24 +53,12 @@ function ShelfPoster({ item, caption, onOpen, onWatch }) {
             {caption || `${getPrimaryGenre(item)} • ${getYear(item)}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onWatch(item);
-            }}
-            className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
-          >
-            <Play className="h-4 w-4" />
-            Watch
-          </button>
-          <button
-            onClick={() => onOpen(item)}
-            className="btn-primary flex-1 justify-center px-4 py-2 text-sm whitespace-nowrap"
-          >
-            Details
-          </button>
-        </div>
+        <button
+          onClick={() => onOpen(item)}
+          className="btn-primary w-full justify-center px-4 py-2 text-sm"
+        >
+          Details
+        </button>
       </div>
     </article>
   );
@@ -136,7 +124,7 @@ export default function ForYou() {
     queryFn: async () => {
       const wantsMovies = userPrefs.types.length === 0 || userPrefs.types.includes('movies');
       if (!wantsMovies) return [];
-      const data = mappedGenres[0] ? await getMoviesByGenre(mappedGenres[0], 1) : await getTrendingMovies(1);
+      const data = mappedGenres[0] ? await contentService.getMoviesByGenre(mappedGenres[0], 1) : await contentService.getTrendingMovies(1);
       return uniqueById((data.movies || []).map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
     },
   });
@@ -146,7 +134,7 @@ export default function ForYou() {
     queryFn: async () => {
       const wantsSeries = userPrefs.types.length === 0 || userPrefs.types.includes('tv') || userPrefs.types.includes('anime');
       if (!wantsSeries) return [];
-      const data = await tmdbApi.getTrendingTVShows('week', 1);
+      const data = await contentService.getTrendingTVShows('week', 1);
       return uniqueById((data.results || [])
         .filter(item => !mappedGenres.length || item.genre_ids?.some(gid => mappedGenres.includes(gid)))
         .map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
@@ -157,8 +145,8 @@ export default function ForYou() {
     queryKey: ['recommendationShelf', anchorId, anchorType],
     queryFn: async () => {
       const data = anchorId
-        ? (anchorType === 'tv' ? await tmdbApi.getTVRecommendations(anchorId) : await tmdbApi.getMovieRecommendations(anchorId))
-        : await tmdbApi.getTrendingMovies('week', 1);
+        ? (anchorType === 'tv' ? await contentService.getTVRecommendations(anchorId) : await contentService.getMovieRecommendations(anchorId))
+        : await contentService.getTrendingMoviesTMDB('week', 1);
       return uniqueById((data.results || []).map(normalizeMediaItem)).slice(0, ITEMS_PER_PAGE);
     },
   });
@@ -318,9 +306,6 @@ export default function ForYou() {
                 key={getMediaId(item)}
                 item={item}
                 onOpen={openMovie}
-                onWatch={(movieItem) => {
-                  navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
-                }}
               />
             ))}
           </div>
@@ -340,9 +325,6 @@ export default function ForYou() {
                   key={getMediaId(item)}
                   item={item}
                   onOpen={openMovie}
-                  onWatch={(movieItem) => {
-                    navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
-                  }}
                 />
               ))}
             </div>
@@ -364,9 +346,6 @@ export default function ForYou() {
                   item={item}
                   caption={`${getGenreList(item).slice(0, 2).join(' • ') || getPrimaryGenre(item)} • ${getTypeLabel(item)}`}
                   onOpen={openMovie}
-                  onWatch={(movieItem) => {
-                    navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
-                  }}
                 />
               ))}
             </div>

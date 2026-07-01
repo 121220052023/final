@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=Hanken+Grotesk:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -451,4 +451,350 @@ input[type="password"]::-webkit-textfield-decoration-container {
 
 input[type="password"]::-webkit-inner-spin-button {
   display: none;
+}
+
+/* ============================================
+   Admin Design System
+   ============================================ */
+
+.admin-body {
+  --admin-sidebar-width: 220px;
+  background: var(--app-background);
+}
+
+.admin-body h1, .admin-body h2, .admin-body h3, .admin-body h4 {
+  font-family: "Hanken Grotesk", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.admin-body .mono-num {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* Admin card */
+.admin-card {
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+}
+
+.admin-card:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+}
+
+/* Admin Sidebar */
+.admin-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--admin-sidebar-width);
+  height: 100vh;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-card);
+  border-right: 1px solid var(--app-border);
+}
+
+.admin-sidebar-logo {
+  padding: 1.5rem 1.25rem 1rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.admin-sidebar-nav {
+  flex: 1;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.admin-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--app-muted-foreground);
+  transition: all 0.15s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.admin-sidebar-item:hover {
+  background: var(--app-muted);
+  color: var(--app-foreground);
+}
+
+.admin-sidebar-item.active {
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
+  color: var(--app-primary);
+}
+
+.admin-sidebar-item.active svg {
+  color: var(--app-primary);
+}
+
+.admin-sidebar-item svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.admin-sidebar-footer {
+  padding: 0.75rem;
+  border-top: 1px solid var(--app-border);
+}
+
+/* Admin main content */
+.admin-main {
+  margin-left: var(--admin-sidebar-width);
+  padding: 2rem 2.5rem;
+}
+
+/* Admin search */
+.admin-search {
+  background: transparent;
+  border: 1px solid var(--app-border);
+  border-radius: 0.875rem;
+  padding: 0.625rem 1rem 0.625rem 2.75rem;
+  color: var(--app-foreground);
+  font-size: 0.875rem;
+  width: 100%;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.admin-search:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-primary) 15%, transparent);
+}
+
+.admin-search::placeholder {
+  color: var(--app-muted-foreground);
+}
+
+/* Admin table */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-muted-foreground);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.admin-table td {
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tr:hover td {
+  background: var(--app-muted);
+}
+
+/* Admin buttons */
+.admin-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.125rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--app-on-primary);
+  background: var(--app-primary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.admin-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.125rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--app-foreground);
+  background: transparent;
+  border: 1px solid var(--app-border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-btn-secondary:hover {
+  background: var(--app-muted);
+  border-color: color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+}
+
+.admin-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--app-muted-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-btn-ghost:hover {
+  background: var(--app-muted);
+  color: var(--app-foreground);
+}
+
+/* Admin badge */
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5625rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid;
+}
+
+/* Admin modal */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--app-foreground) 50%, transparent);
+}
+
+.admin-modal {
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 1rem;
+}
+
+/* Admin input */
+.admin-input {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--app-foreground);
+  font-size: 0.8125rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.admin-input:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-primary) 15%, transparent);
+}
+
+.admin-input::placeholder {
+  color: var(--app-muted-foreground);
+}
+
+.admin-select {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  color: var(--app-foreground);
+  font-size: 0.8125rem;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-select:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-primary) 15%, transparent);
+}
+
+/* Admin toggle switch */
+.admin-toggle {
+  position: relative;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  flex-shrink: 0;
+}
+
+.admin-toggle.on {
+  background: var(--app-primary);
+}
+
+.admin-toggle.off {
+  background: var(--app-border);
+}
+
+.admin-toggle-knob {
+  position: absolute;
+  top: 0.1875rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.admin-toggle.on .admin-toggle-knob {
+  left: calc(100% - 1.1875rem);
+}
+
+.admin-toggle.off .admin-toggle-knob {
+  left: 0.1875rem;
+}
+
+/* Glow accent line */
+.admin-glow-line {
+  width: 2rem;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--app-primary);
 }

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Calendar,
+  Clock,
+  Eye,
   Heart,
   Languages,
   MessageSquare,
-  Play,
   Plus,
   Sparkles,
   Star,
@@ -18,11 +19,12 @@ import { getMovieDetails } from '../services/imdbService';
 import { getAISummary } from '../services/aiService';
 import { tmdbApi } from '../services/tmdb';
 import { reviewService } from '../services/reviewService';
+import { watchTimeService } from '../services/watchTimeService';
 import ContentFilter from '../components/ContentFilter';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
 import { useAuth } from '../context/AuthContext';
-import { useParentalControls } from '../context/ParentalControlContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import {
   getBackdropUrl,
   getDisplayCopy,
@@ -34,7 +36,7 @@ import {
   normalizeMediaItem,
 } from '../utils/media';
 
-function SimilarCard({ item, onOpen, onWatch }) {
+function SimilarCard({ item, onOpen }) {
   return (
     <article className="movie-card overflow-hidden rounded-[1.4rem]">
       <button onClick={() => onOpen(item)} className="group block w-full text-left">
@@ -50,24 +52,12 @@ function SimilarCard({ item, onOpen, onWatch }) {
         <button onClick={() => onOpen(item)} className="display-font text-left text-lg font-bold text-foreground hover:text-primary">
           {getDisplayTitle(item)}
         </button>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onWatch(item);
-            }}
-            className="btn-secondary flex-1 justify-center px-4 py-2 text-sm"
-          >
-            <Play className="h-4 w-4" />
-            Watch
-          </button>
-          <button
-            onClick={() => onOpen(item)}
-            className="btn-primary flex-1 justify-center px-4 py-2 text-sm whitespace-nowrap"
-          >
-            Details
-          </button>
-        </div>
+        <button
+          onClick={() => onOpen(item)}
+          className="btn-primary w-full justify-center px-4 py-2 text-sm"
+        >
+          Details
+        </button>
       </div>
     </article>
   );
@@ -79,9 +69,9 @@ export default function MovieDetails() {
   const navigate = useNavigate();
   const typeParam = location.state?.type;
   const { user, isAuthenticated } = useAuth();
+  const { isProOrAbove, plan } = useSubscription();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   const { likedMovies, addToLikedMovies, removeFromLikedMovies } = useLikedMovies();
-  const { incrementWatchTime } = useParentalControls();
 
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -101,35 +91,84 @@ export default function MovieDetails() {
   const [reviewRating, setReviewRating] = useState(7);
   const [likedReviewIds, setLikedReviewIds] = useState(new Set());
   const [watchProviders, setWatchProviders] = useState(null);
-  const [showWatchModal, setShowWatchModal] = useState(false);
-  const [watchTab, setWatchTab] = useState('stream');
-  const [activeServer, setActiveServer] = useState('server1');
-
-  const getStreamUrl = () => {
-    if (!movie) return '';
-    const isTV = movie.Type === 'tv';
-    const tmdbId = movie.id || movie.tmdbID;
-    const imdbId = movie.imdbID;
-    const hasImdb = imdbId && imdbId.startsWith('tt');
-    
-    switch (activeServer) {
-      case 'server1':
-        return `https://vidsrc.to/embed/${isTV ? 'tv' : 'movie'}/${hasImdb ? imdbId : tmdbId}`;
-      case 'server2':
-        return `https://vidsrc.xyz/embed/${isTV ? 'tv' : 'movie'}/${hasImdb ? imdbId : tmdbId}`;
-      case 'server3':
-        return `https://embed.su/embed/${isTV ? 'tv' : 'movie'}/${hasImdb ? imdbId : tmdbId}`;
-      case 'server4':
-        return hasImdb
-          ? `https://vidsrc.me/embed/${isTV ? 'tv' : 'movie'}?imdb=${imdbId}`
-          : `https://vidsrc.me/embed/${isTV ? 'tv' : 'movie'}?tmdb=${tmdbId}`;
-      default:
-        return `https://vidsrc.to/embed/${isTV ? 'tv' : 'movie'}/${hasImdb ? imdbId : tmdbId}`;
-    }
-  };
+  const [watched, setWatched] = useState(false);
+  const [dailyUsedSeconds, setDailyUsedSeconds] = useState(0);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   const isInWatchlist = watchlist.some((item) => item.imdbID === id);
   const isLiked = likedMovies.some((item) => item.imdbID === id);
+  const isFreeUser = plan === 'free';
+  const limitReached = watchTimeService.isLimitReached(plan, dailyUsedSeconds);
+  const remainingMin = watchTimeService.getRemainingMinutes(plan, dailyUsedSeconds);
+  const showLimitIndicator = plan !== 'ultimate' && dailyUsedSeconds > 0;
+  const tmdbId = parseInt(id);
+
+  useEffect(() => {
+    if (!user || !id) return;
+    supabase.from('watch_history').select('id').eq('user_id', user.id).eq('movie_id', id).maybeSingle().then(({ data }) => {
+      if (data) setWatched(true);
+    });
+  }, [user, id]);
+
+  useEffect(() => {
+    if (!user || plan === 'ultimate') return;
+    watchTimeService.getDailyUsage(user.id).then(setDailyUsedSeconds);
+  }, [user, plan]);
+
+  useEffect(() => {
+    if (!user || plan === 'ultimate') return;
+    if (!showPlayer) return;
+    const interval = setInterval(() => {
+      watchTimeService.addWatchTime(user.id, 5);
+      setDailyUsedSeconds(prev => prev + 5);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [user, showPlayer, plan]);
+
+  const handleMarkAsWatched = async () => {
+    if (!user) {
+      toast.error('Please sign in to track what you watch');
+      return;
+    }
+    if (!watched && limitReached) {
+      toast.error(`Daily watch limit reached. You have ${remainingMin} minutes left.`);
+      return;
+    }
+    try {
+      if (watched) {
+        await supabase.from('watch_history').delete().eq('user_id', user.id).eq('movie_id', id);
+        setWatched(false);
+        toast.success('Removed from watch history');
+      } else {
+        await supabase.from('watch_history').insert({
+          user_id: user.id,
+          movie_id: id,
+          movie_title: movie?.title || '',
+          movie_type: typeParam || 'movie',
+          poster_url: movie?.poster || null,
+          progress: 0,
+          completed: true,
+          watched_at: new Date().toISOString(),
+        });
+        setWatched(true);
+        toast.success('Marked as watched');
+      }
+    } catch {
+      toast.error('Failed to update watch history');
+    }
+  };
+
+  const handleWatchNow = () => {
+    if (!user) {
+      toast.error('Please sign in to watch');
+      return;
+    }
+    if (limitReached) {
+      toast.error(`Daily watch limit reached. ${plan === 'free' ? 'Upgrade to Pro for 4h or Ultimate for unlimited.' : 'Upgrade to Ultimate for unlimited.'}`);
+      return;
+    }
+    setShowPlayer(true);
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -140,7 +179,68 @@ export default function MovieDetails() {
       setLoading(true);
 
       try {
-        const details = await getMovieDetails(id, typeParam);
+        const tmdbId = parseInt(id)
+        const localTable = typeParam === 'tv' || typeParam === 'series' ? 'series' : 'movies'
+        const { data: localMovie } = await supabase.from(localTable).select('*').eq('tmdb_id', tmdbId).maybeSingle()
+        let details
+        if (localMovie) {
+          details = {
+            id: localMovie.tmdb_id.toString(),
+            imdbID: localMovie.tmdb_id.toString(),
+            tmdbID: localMovie.tmdb_id.toString(),
+            title: localMovie.title,
+            year: localMovie.release_year || '',
+            rated: 'N/A',
+            released: localMovie.release_year || 'N/A',
+            runtime: localMovie.runtime ? `${localMovie.runtime} min` : 'N/A',
+            genre: Array.isArray(localMovie.genres) ? localMovie.genres.join(', ') : 'N/A',
+            director: localMovie.director || 'N/A',
+            writer: 'N/A',
+            actors: Array.isArray(localMovie.cast_list) ? localMovie.cast_list.slice(0, 5).join(', ') : 'N/A',
+            overview: localMovie.description || 'No description available',
+            language: localMovie.language?.toUpperCase() || null,
+            country: null,
+            awards: 'N/A',
+            poster_url: localMovie.poster_url || null,
+            ratings: [{ Source: 'Admin', Value: localMovie.rating ? `${localMovie.rating}/10` : 'N/A' }],
+            metascore: 'N/A',
+            imdbRating: localMovie.rating || '0.0',
+            imdbVotes: '0',
+            type: 'movie',
+            dvd: 'N/A',
+            boxOffice: 'N/A',
+            production: 'N/A',
+            website: 'N/A',
+            response: 'True',
+            backdrop: null,
+            spoken_languages: [],
+            Title: localMovie.title,
+            Year: localMovie.release_year || 'N/A',
+            Rated: 'N/A',
+            Released: localMovie.release_year || 'N/A',
+            Runtime: localMovie.runtime ? `${localMovie.runtime} min` : 'N/A',
+            Genre: Array.isArray(localMovie.genres) ? localMovie.genres.join(', ') : 'N/A',
+            Director: localMovie.director || 'N/A',
+            Writer: 'N/A',
+            Actors: Array.isArray(localMovie.cast_list) ? localMovie.cast_list.slice(0, 5).join(', ') : 'N/A',
+            Plot: localMovie.description || 'No description available',
+            Language: localMovie.language?.toUpperCase() || null,
+            Country: null,
+            Awards: 'N/A',
+            Poster: localMovie.poster_url || null,
+            Ratings: [{ Source: 'Admin', Value: localMovie.rating ? `${localMovie.rating}/10` : 'N/A' }],
+            Metascore: 'N/A',
+            Type: 'movie',
+            DVD: 'N/A',
+            BoxOffice: 'N/A',
+            Production: 'N/A',
+            Website: 'N/A',
+            Response: 'True',
+            isLocalOverride: true,
+          }
+        } else {
+          details = await getMovieDetails(id, typeParam);
+        }
         if (cancelled) return;
         setMovie(details);
 
@@ -246,14 +346,7 @@ export default function MovieDetails() {
     };
   }, [movie, id, isAuthenticated, user?.id]);
 
-  useEffect(() => {
-    if (location.state?.autoplay && movie) {
-      setWatchTab('stream');
-      incrementWatchTime(0).catch(() => {});
-      setShowWatchModal(true);
-      navigate(location.pathname, { replace: true, state: { type: typeParam } });
-    }
-  }, [location.state?.autoplay, movie]);
+  
 
   const averageRating = useMemo(() => {
     if (!reviews.length) return null;
@@ -271,6 +364,11 @@ export default function MovieDetails() {
     if (!isAuthenticated) {
       toast.error('Please sign in to use AI features');
       navigate('/login');
+      return;
+    }
+    if (!isProOrAbove) {
+      toast.error('AI summaries are available on Pro and above');
+      navigate('/pricing');
       return;
     }
     setLoadingAI(true);
@@ -426,6 +524,25 @@ export default function MovieDetails() {
   return (
     <ContentFilter movie={movie}>
       <div className="pb-20 pt-24">
+        {showPlayer && (
+          <div className="fixed inset-0 z-[60] bg-black p-0">
+            <div className="relative h-full w-full">
+              <button
+                onClick={() => setShowPlayer(false)}
+                className="absolute right-4 top-4 z-10 rounded-full bg-black/70 p-2 text-white hover:bg-white/20 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <iframe
+                className="h-full w-full"
+                src={`https://vidsrc.to/embed/${typeParam === 'tv' || movie?.Type === 'series' ? 'tv' : 'movie'}/${tmdbId}`}
+                title="Video player"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        )}
         {showTrailer && trailer ? (
           <div className="fixed inset-0 z-[60] bg-black/82 p-4 backdrop-blur-md">
             <div className="page-shell-wide flex h-full items-center justify-center">
@@ -493,15 +610,11 @@ export default function MovieDetails() {
                     </button>
                   ) : null}
                   <button
-                    onClick={() => {
-                      setWatchTab('stream');
-                      incrementWatchTime(0).catch(() => {});
-                      setShowWatchModal(true);
-                    }}
-                    className="btn-primary flex-1 justify-center px-6 py-3.5"
+                    onClick={handleWatchNow}
+                    disabled={limitReached}
+                    className={`${limitReached ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'} flex-1 justify-center px-6 py-3.5`}
                   >
-                    <Play className="h-4 w-4" />
-                    Watch Now
+                    {limitReached ? 'Limit reached' : 'Watch Now'}
                   </button>
                   <button
                     onClick={handleToggleWatchlist}
@@ -517,7 +630,24 @@ export default function MovieDetails() {
                     <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
                     {isLiked ? 'Liked' : 'Like'}
                   </button>
+                  <button
+                    onClick={handleMarkAsWatched}
+                    disabled={!watched && limitReached}
+                    title={watched ? 'Remove from watch history' : 'Mark as watched'}
+                    className={`${watched ? 'btn-accent' : 'btn-secondary border-white/20 bg-black/30 text-white'} px-3 py-3.5`}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
                 </div>
+
+                {showLimitIndicator && (
+                  <div className={`mt-3 flex items-center gap-2 text-xs font-semibold ${limitReached ? 'text-red-400' : 'text-amber-400'}`}>
+                    <Clock className="h-3.5 w-3.5" />
+                    {limitReached
+                      ? 'Daily watch limit reached. Upgrade to Pro for 4h or Ultimate for unlimited.'
+                      : `${remainingMin}m of daily watch time remaining (${plan === 'free' ? '1h' : '4h'} limit)`}
+                  </div>
+                )}
               </div>
 
               <div className="editorial-panel rounded-[1.8rem] p-6 text-foreground">
@@ -618,9 +748,6 @@ export default function MovieDetails() {
                     key={getMediaId(item)}
                     item={item}
                     onOpen={openMovie}
-                    onWatch={(movieItem) => {
-                      navigate(`/movie/${getMediaId(movieItem)}`, { state: { type: movieItem.Type || movieItem.type || 'movie', autoplay: true } });
-                    }}
                   />
                 ))}
               </div>
@@ -747,134 +874,6 @@ export default function MovieDetails() {
             )}
           </section>
         </div>
-
-        {/* Watch Modal */}
-        {showWatchModal && movie && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowWatchModal(false)}>
-            <div className="editorial-panel max-w-4xl w-full max-h-[92vh] overflow-hidden rounded-[1.8rem] p-0 relative flex flex-col bg-background border border-border shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border gap-4">
-                <div>
-                  <div className="section-label">Watch Now</div>
-                  <h2 className="section-heading mt-1 text-2xl">{getDisplayTitle(movie)}</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex rounded-xl bg-muted p-1">
-                    <button
-                      onClick={() => setWatchTab('stream')}
-                      className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                        watchTab === 'stream' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Stream Player
-                    </button>
-                    <button
-                      onClick={() => setWatchTab('providers')}
-                      className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                        watchTab === 'providers' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Official Platforms
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setShowWatchModal(false)}
-                    className="rounded-full p-2 hover:bg-muted transition-colors ml-2"
-                  >
-                    <X className="h-5 w-5 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-5">
-                {watchTab === 'stream' ? (
-                  <div className="space-y-5">
-                    <div className="relative aspect-video w-full overflow-hidden rounded-[1.2rem] border border-border bg-black">
-                      <iframe
-                        className="h-full w-full"
-                        src={getStreamUrl()}
-                        title="Stream Player"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Streaming Server:</div>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { id: 'server1', name: 'Server 1 (VidSrc)' },
-                          { id: 'server2', name: 'Server 2 (VidSrc.xyz)' },
-                          { id: 'server3', name: 'Server 3 (Embed.su)' },
-                          { id: 'server4', name: 'Server 4 (VidSrc.me)' },
-                        ].map((server) => (
-                          <button
-                            key={server.id}
-                            onClick={() => setActiveServer(server.id)}
-                            className={`rounded-xl px-4 py-2.5 text-xs font-semibold border transition-all ${
-                              activeServer === server.id
-                                ? 'bg-primary border-primary text-white shadow-md'
-                                : 'bg-card border-border text-foreground hover:border-primary/50'
-                            }`}
-                          >
-                            {server.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {watchProviders && watchProviders.US && Object.keys(watchProviders.US).length > 0 ? (
-                      <>
-                        {Object.entries(watchProviders.US).map(([type, providers]) => (
-                          providers && providers.length > 0 && (
-                            <div key={type} className="mb-6">
-                              <h3 className="capitalize text-sm font-semibold text-muted-foreground mb-3">{type} ({providers.length})</h3>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                {providers.slice(0, 12).map((provider) => (
-                                  <a
-                                    key={provider.provider_id}
-                                    href={provider.link || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-card border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                                  >
-                                    {provider.logo_path && (
-                                      <img
-                                        src={`https://image.tmdb.org/t/p/w92${provider.logo_path}`}
-                                        alt={provider.provider_name}
-                                        className="h-10 w-auto object-contain filter grayscale group-hover:grayscale-0 transition-all"
-                                      />
-                                    )}
-                                    <span className="text-xs font-medium text-center text-foreground/80 group-hover:text-primary">{provider.provider_name}</span>
-                                  </a>
-                                ))}
-                              </div>
-                            </div>
-                          )
-                        ))}
-                      </>
-                    ) : (
-                      <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-[1.2rem] border border-dashed border-border">
-                        <p className="text-base font-semibold">No direct streaming provider links found for your region.</p>
-                        <p className="text-sm mt-1">Please use the "Stream Player" tab to play the video.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-muted/10">
-                <span className="text-[11px] text-muted-foreground max-w-lg leading-relaxed">
-                  💡 <strong>Tip:</strong> If the stream doesn't play, buffers, or fails to load, try switching to a different Server. TV shows can select seasons and episodes directly inside the player UI.
-                </span>
-                <button onClick={() => setShowWatchModal(false)} className="btn-primary px-6 py-2.5 self-end sm:self-auto">
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {showAISummary && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAISummary(false)}>

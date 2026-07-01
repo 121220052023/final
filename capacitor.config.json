@@ -1,0 +1,9 @@
+{
+  "appId": "com.oceanofmovies.app",
+  "appName": "Ocean of Movies",
+  "webDir": "dist",
+  "server": {
+    "url": "https://ocean-of-movies-pi.vercel.app",
+    "cleartext": false
+  }
+}

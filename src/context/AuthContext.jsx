@@ -71,14 +71,14 @@ export const AuthProvider = ({ children }) => {
         if (isMounted) setLoading(false);
       });
 
-    // Subsequent auth changes (login/logout) — update state without touching loading
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
+    // Subsequent auth changes — login, logout, password recovery
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       if (s?.user) {
         setUser(s.user);
         setSession(s);
         fetchProfile(s.user.id).catch(() => {});
         if (event === 'SIGNED_IN') {
-          fetchOnboarding(s.user.id);
+          fetchOnboarding(s.user.id).catch(() => {});
         }
       } else {
         setUser(null);

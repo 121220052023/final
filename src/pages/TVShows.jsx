@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, MinusCircle, Monitor, PlusCircle, Radio } from 'lucide-react';
-import { tmdbApi } from '../services/tmdb';
+import { contentService } from '../services/contentService';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useLikedMovies } from '../context/LikedMoviesContext';
+import { getRatingValue } from '../utils/media';
 
 const categories = [
   { id: 'popular', label: 'Popular' },
@@ -23,6 +24,7 @@ function normalizeShow(show) {
     Poster: show.poster_path ? `https://image.tmdb.org/t/p/w780${show.poster_path}` : 'https://via.placeholder.com/700x1050?text=No+Image',
     Plot: show.overview || 'No description available',
     rating: show.vote_average,
+    vote_average: show.vote_average,
   };
 }
 
@@ -45,19 +47,19 @@ export default function TVShows() {
         let data;
         switch (category) {
           case 'top_rated':
-            data = await tmdbApi.getTopRatedTVShows(page);
+            data = await contentService.getTopRatedTVShows(page);
             break;
           case 'on_the_air':
-            data = await tmdbApi.getOnTheAirTVShows(page);
+            data = await contentService.getOnTheAirTVShows(page);
             break;
           case 'airing_today':
-            data = await tmdbApi.getAiringTodayTVShows(page);
+            data = await contentService.getAiringTodayTVShows(page);
             break;
           case 'trending':
-            data = await tmdbApi.getTrendingTVShows(page);
+            data = await contentService.getTrendingTVShows('week', page);
             break;
           default:
-            data = await tmdbApi.getPopularTVShows(page);
+            data = await contentService.getPopularTVShows(page);
         }
 
         if (!cancelled) {
@@ -270,7 +272,7 @@ export default function TVShows() {
                     <h3 className="display-font text-lg font-bold text-foreground transition-colors group-hover:text-primary">
                       {show.Title}
                     </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{show.Year} • {show.rating?.toFixed(1) || 'N/A'} rating</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{show.Year} • {getRatingValue(show) != null ? `${getRatingValue(show).toFixed(1)} rating` : 'N/A rating'}</p>
                     <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{show.Plot}</p>
                   </div>
                 </button>
