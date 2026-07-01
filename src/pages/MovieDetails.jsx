@@ -67,7 +67,8 @@ export default function MovieDetails() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const typeParam = location.state?.type;
+  const rawType = location.state?.type;
+  const typeParam = rawType === 'series' ? 'tv' : rawType;
   const { user, isAuthenticated } = useAuth();
   const { isProOrAbove, plan } = useSubscription();
   const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();

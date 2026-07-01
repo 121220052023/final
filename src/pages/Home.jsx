@@ -176,7 +176,7 @@ export default function Home() {
         let filteredCurated = (curatedRaw.movies || []).filter(isNotMature);
         let filteredUpcoming = (upcomingRaw.movies || []).filter(isNotMature);
 
-        const tvResults = (tvRaw?.results || []).map(t => normalizeMediaItem({ ...t, Type: 'series', type: 'series' }));
+        const tvResults = (tvRaw?.results || []).map(t => normalizeMediaItem({ ...t, Type: 'series', type: 'tv' }));
         const filteredTv = tvResults.filter(isNotMature);
 
         if (isChild) {
