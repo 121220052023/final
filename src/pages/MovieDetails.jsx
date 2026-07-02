@@ -241,6 +241,56 @@ export default function MovieDetails() {
           }
         } else {
           details = await getMovieDetails(id, typeParam);
+          const { data: localOverride } = await supabase
+            .from(localTable)
+            .select('*')
+            .eq('tmdb_id', tmdbId)
+            .maybeSingle();
+          if (localOverride) {
+            if (localOverride.title) details.Title = localOverride.title;
+            if (localOverride.release_year) {
+              details.year = localOverride.release_year;
+              details.Year = localOverride.release_year;
+              details.released = localOverride.release_year;
+              details.Released = localOverride.release_year;
+            }
+            if (localOverride.description) {
+              details.overview = localOverride.description;
+              details.Plot = localOverride.description;
+            }
+            if (localOverride.poster_url) {
+              details.poster_url = localOverride.poster_url;
+              details.Poster = localOverride.poster_url;
+            }
+            if (localOverride.rating) {
+              details.imdbRating = localOverride.rating;
+              details.ratings = [{ Source: 'Admin', Value: `${localOverride.rating}/10` }];
+              details.Ratings = [{ Source: 'Admin', Value: `${localOverride.rating}/10` }];
+            }
+            if (localOverride.genres) {
+              const genreStr = Array.isArray(localOverride.genres) ? localOverride.genres.join(', ') : localOverride.genres;
+              details.genre = genreStr;
+              details.Genre = genreStr;
+            }
+            if (localOverride.director) {
+              details.director = localOverride.director;
+              details.Director = localOverride.director;
+            }
+            if (localOverride.cast_list) {
+              const castStr = Array.isArray(localOverride.cast_list) ? localOverride.cast_list.join(', ') : localOverride.cast_list;
+              details.actors = castStr;
+              details.Actors = castStr;
+            }
+            if (localOverride.runtime) {
+              details.runtime = `${localOverride.runtime} min`;
+              details.Runtime = `${localOverride.runtime} min`;
+            }
+            if (localOverride.language) {
+              details.language = localOverride.language.toUpperCase();
+              details.Language = localOverride.language.toUpperCase();
+            }
+            details.isLocalOverride = true;
+          }
         }
         if (cancelled) return;
         setMovie(details);
